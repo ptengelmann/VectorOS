@@ -1,0 +1,135 @@
+// VectorOS Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  name          String?
+  passwordHash  String?
+  clerkId       String?  @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspaces    Workspace[]
+  deals         Deal[]
+
+  @@map("users")
+}
+
+// Workspace model (for multi-tenancy)
+model Workspace {
+  id            String   @id @default(uuid())
+  name          String
+  slug          String   @unique
+  tier          String   @default("starter") // starter, pro, scale, enterprise
+
+  ownerId       String
+  owner         User     @relation(fields: [ownerId], references: [id])
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  integrations  Integration[]
+  deals         Deal[]
+  insights      Insight[]
+
+  @@map("workspaces")
+}
+
+// Integration model (HubSpot, Notion, etc.)
+model Integration {
+  id            String   @id @default(uuid())
+  type          String   // hubspot, notion, gmail, slack
+  status        String   @default("active") // active, inactive, error
+  credentials   Json     // encrypted credentials
+  config        Json?    // integration-specific config
+
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastSyncAt    DateTime?
+
+  @@map("integrations")
+}
+
+// Deal/Opportunity model
+model Deal {
+  id            String   @id @default(uuid())
+  title         String
+  value         Float?
+  stage         String   // lead, qualified, proposal, negotiation, won, lost
+  probability   Int?     // 0-100
+  closeDate     DateTime?
+
+  contactName   String?
+  contactEmail  String?
+  company       String?
+
+  source        String?  // hubspot, manual, etc.
+  externalId    String?  // ID from source system
+
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+
+  assignedToId  String?
+  assignedTo    User?    @relation(fields: [assignedToId], references: [id])
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  activities    Activity[]
+
+  @@map("deals")
+}
+
+// Activity model (emails, calls, meetings)
+model Activity {
+  id            String   @id @default(uuid())
+  type          String   // email, call, meeting, note
+  subject       String?
+  content       String?
+  scheduledAt   DateTime?
+  completedAt   DateTime?
+
+  dealId        String
+  deal          Deal     @relation(fields: [dealId], references: [id])
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("activities")
+}
+
+// AI Insight model
+model Insight {
+  id            String   @id @default(uuid())
+  type          String   // recommendation, warning, prediction
+  title         String
+  description   String
+  priority      String   @default("medium") // low, medium, high, critical
+  confidence    Float    // 0.0-1.0
+
+  data          Json?    // supporting data
+  actions       Json?    // suggested actions
+
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+
+  status        String   @default("new") // new, viewed, actioned, dismissed
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("insights")
+}

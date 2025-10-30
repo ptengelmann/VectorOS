@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "vectoros-ai-core"
+version = "0.1.0"
+description = "VectorOS AI Core Engine"
+authors = ["VectorOS Team"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

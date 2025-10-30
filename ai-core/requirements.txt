@@ -1,0 +1,31 @@
+# VectorOS AI Core Dependencies
+
+# Web framework
+fastapi==0.108.0
+uvicorn[standard]==0.25.0
+pydantic==2.5.2
+pydantic-settings==2.1.0
+
+# AI & LLM
+anthropic==0.8.0
+langchain==0.1.0
+langchain-anthropic==0.1.0
+langchain-community==0.0.13
+
+# Database
+psycopg2-binary==2.9.9
+asyncpg==0.29.0
+
+# Utilities
+python-dotenv==1.0.0
+httpx==0.25.2
+tenacity==8.2.3
+pyyaml==6.0.1
+
+# Data processing
+pandas==2.1.4
+numpy==1.26.2
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
