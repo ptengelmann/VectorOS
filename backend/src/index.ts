@@ -29,7 +29,7 @@ import { DealRepository } from './repositories/deal.repository';
 // Services
 import { DealService } from './services/deal.service';
 import { AIService } from './services/ai.service';
-import { InsightService } from './insight.service';
+import { InsightService } from './services/insight.service';
 
 // Initialize Prisma
 const prisma = new PrismaClient({
