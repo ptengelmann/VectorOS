@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional
 from datetime import datetime
 
+from pydantic import BaseModel
 from anthropic import Anthropic
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage

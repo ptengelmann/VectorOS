@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     # AI Configuration
     anthropic_api_key: str = Field(..., min_length=1)
-    ai_model: str = "claude-3-5-sonnet-20241022"
+    ai_model: str = "claude-sonnet-4-5-20250929"  # Claude Sonnet 4.5 (latest)
     ai_temperature: float = 0.7
     ai_max_tokens: int = 4096
     ai_timeout: int = 120

@@ -49,6 +49,37 @@ export interface DealAnalysis {
   next_best_action?: string;
 }
 
+export interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  ownerId: string;
+  settings?: any;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateWorkspaceData {
+  name: string;
+  slug?: string;
+}
+
+export interface Insight {
+  id: string;
+  workspaceId: string;
+  type: string; // recommendation, warning, prediction, opportunity, risk
+  title: string;
+  description: string;
+  priority: string; // low, medium, high, critical
+  confidence: number; // 0.0-1.0
+  data: any;
+  actions: any;
+  status: string; // new, viewed, actioned, dismissed
+  createdAt: string;
+  updatedAt: string;
+}
+
 class APIClient {
   private async request<T>(
     url: string,
@@ -85,6 +116,46 @@ class APIClient {
         },
       };
     }
+  }
+
+  // ========================================================================
+  // Workspaces API
+  // ========================================================================
+
+  async getUserWorkspaces(userId: string): Promise<ApiResponse<Workspace[]>> {
+    return this.request<Workspace[]>(`${API_BASE_URL}/api/v1/users/${userId}/workspaces`);
+  }
+
+  async getWorkspace(workspaceId: string): Promise<ApiResponse<Workspace>> {
+    return this.request<Workspace>(`${API_BASE_URL}/api/v1/workspaces/${workspaceId}`);
+  }
+
+  async createWorkspace(userId: string, data: CreateWorkspaceData, userName?: string): Promise<ApiResponse<Workspace>> {
+    return this.request<Workspace>(`${API_BASE_URL}/api/v1/workspaces`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...data,
+        ownerId: userId,
+        userName,
+      }),
+    });
+  }
+
+  async updateWorkspace(workspaceId: string, userId: string, data: Partial<CreateWorkspaceData>): Promise<ApiResponse<Workspace>> {
+    return this.request<Workspace>(`${API_BASE_URL}/api/v1/workspaces/${workspaceId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        ...data,
+        userId,
+      }),
+    });
+  }
+
+  async deleteWorkspace(workspaceId: string, userId: string): Promise<ApiResponse<void>> {
+    return this.request<void>(`${API_BASE_URL}/api/v1/workspaces/${workspaceId}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ userId }),
+    });
   }
 
   // ========================================================================
@@ -149,6 +220,38 @@ class APIClient {
         workspaceId,
         context,
       }),
+    });
+  }
+
+  // ========================================================================
+  // Insights API
+  // ========================================================================
+
+  async generateInsights(workspaceId: string): Promise<ApiResponse<Insight[]>> {
+    return this.request<Insight[]>(`${API_BASE_URL}/api/v1/workspaces/${workspaceId}/insights/generate`, {
+      method: 'POST',
+    });
+  }
+
+  async getInsights(workspaceId: string): Promise<ApiResponse<Insight[]>> {
+    return this.request<Insight[]>(`${API_BASE_URL}/api/v1/workspaces/${workspaceId}/insights`);
+  }
+
+  async markInsightViewed(insightId: string): Promise<ApiResponse<Insight>> {
+    return this.request<Insight>(`${API_BASE_URL}/api/v1/insights/${insightId}/viewed`, {
+      method: 'PATCH',
+    });
+  }
+
+  async markInsightActioned(insightId: string): Promise<ApiResponse<Insight>> {
+    return this.request<Insight>(`${API_BASE_URL}/api/v1/insights/${insightId}/actioned`, {
+      method: 'PATCH',
+    });
+  }
+
+  async dismissInsight(insightId: string): Promise<ApiResponse<Insight>> {
+    return this.request<Insight>(`${API_BASE_URL}/api/v1/insights/${insightId}/dismiss`, {
+      method: 'PATCH',
     });
   }
 

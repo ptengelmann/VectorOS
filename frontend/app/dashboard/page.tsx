@@ -14,10 +14,26 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [backendHealth, setBackendHealth] = useState(false);
   const [aiHealth, setAIHealth] = useState(false);
-
-  const WORKSPACE_ID = 'demo-workspace'; // In production, get from auth context
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Get workspace ID from localStorage
+    const storedWorkspaceId = localStorage.getItem('currentWorkspaceId');
+    const storedUserEmail = localStorage.getItem('currentUserEmail');
+
+    if (!storedWorkspaceId) {
+      setError('No workspace found. Please complete onboarding first.');
+      setLoading(false);
+      return;
+    }
+
+    setWorkspaceId(storedWorkspaceId);
+  }, []);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+
     loadDashboardData();
     checkSystemHealth();
 
@@ -28,25 +44,29 @@ export default function DashboardPage() {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [workspaceId]);
 
   const loadDashboardData = async () => {
+    if (!workspaceId) return;
+
     setLoading(true);
+    setError(null);
 
     try {
       // Load metrics
-      const metricsResponse = await apiClient.getPipelineMetrics(WORKSPACE_ID);
+      const metricsResponse = await apiClient.getPipelineMetrics(workspaceId);
       if (metricsResponse.success && metricsResponse.data) {
         setMetrics(metricsResponse.data);
       }
 
       // Load deals
-      const dealsResponse = await apiClient.getDeals(WORKSPACE_ID, 1, 10);
+      const dealsResponse = await apiClient.getDeals(workspaceId, 1, 10);
       if (dealsResponse.success && dealsResponse.data) {
         setDeals(dealsResponse.data.items || []);
       }
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
+      setError('Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
@@ -100,7 +120,18 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {loading && !metrics ? (
+        {error ? (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-red-900 dark:text-red-200 mb-2">Error</h3>
+            <p className="text-red-700 dark:text-red-300">{error}</p>
+            <a
+              href="/onboarding"
+              className="mt-4 inline-block px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+            >
+              Go to Onboarding
+            </a>
+          </div>
+        ) : loading && !metrics ? (
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
@@ -175,8 +206,11 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* AI Insights Placeholder */}
-            <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg shadow p-6 text-white">
+            {/* AI Insights Link */}
+            <a
+              href="/insights"
+              className="block bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg shadow p-6 text-white hover:from-blue-600 hover:to-purple-700 transition"
+            >
               <div className="flex items-center space-x-3">
                 <div className="flex-shrink-0">
                   <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -184,16 +218,16 @@ export default function DashboardPage() {
                   </svg>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold">AI Insights Ready</h3>
+                  <h3 className="text-lg font-semibold">AI Insights Dashboard</h3>
                   <p className="text-blue-100">
-                    Claude AI has analyzed your pipeline and identified 3 high-priority recommendations
+                    Get Claude AI-powered recommendations and strategic analysis
                   </p>
                 </div>
-                <button className="px-4 py-2 bg-white text-blue-600 rounded-lg font-medium hover:bg-blue-50 transition">
-                  View Insights
-                </button>
+                <div className="px-4 py-2 bg-white text-blue-600 rounded-lg font-medium">
+                  View Insights →
+                </div>
               </div>
-            </div>
+            </a>
           </div>
         )}
       </main>

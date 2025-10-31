@@ -288,6 +288,29 @@ export class AIService {
     }
   }
 
+  /**
+   * Analyze workspace deals and generate insights
+   */
+  async analyzeWorkspace(deals: any[]): Promise<any[]> {
+    this.logger.info('Analyzing workspace deals', { dealCount: deals.length });
+
+    try {
+      const response = await this.client.post(
+        '/api/v1/insights/analyze-workspace',
+        { deals }
+      );
+
+      if (response.data.success) {
+        return response.data.insights;
+      } else {
+        throw new Error('AI Core returned unsuccessful response');
+      }
+    } catch (error) {
+      this.logger.error('Workspace analysis failed', error as Error);
+      throw error;
+    }
+  }
+
   // Private helpers
   private generateTaskId(): string {
     return `task_${Date.now()}_${Math.random().toString(36).substring(7)}`;

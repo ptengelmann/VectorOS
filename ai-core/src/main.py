@@ -466,6 +466,65 @@ async def execute_agent_task(
         )
 
 
+@app.post("/api/v1/insights/analyze-workspace", tags=["AI"])
+async def analyze_workspace_insights(
+    request: Request,
+    data: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    Analyze all deals in a workspace and generate AI insights
+
+    This endpoint uses Claude to analyze the entire sales pipeline and provide:
+    - Priority deals to focus on
+    - Risk assessment
+    - Action recommendations
+    - Predictive analytics
+
+    Request body:
+    {
+        "deals": [...] // Array of deal objects
+    }
+
+    Returns:
+    {
+        "success": true,
+        "insights": [...] // Array of insight objects
+    }
+    """
+    logger = get_logger("workspace_insights")
+
+    try:
+        deals = data.get("deals", [])
+        logger.info(f"Analyzing workspace with {len(deals)} deals")
+
+        if not deals:
+            return {
+                "success": True,
+                "insights": [],
+                "message": "No deals to analyze"
+            }
+
+        # Use our insights analyzer service
+        from .services.insights_analyzer import InsightsAnalyzer
+        analyzer = InsightsAnalyzer()
+
+        insights = analyzer.analyze_workspace(deals)
+
+        logger.info(f"Generated {len(insights)} insights")
+
+        return {
+            "success": True,
+            "insights": insights
+        }
+
+    except Exception as e:
+        logger.error(f"Workspace analysis failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
 # ============================================================================
 # Application Entry Point
 # ============================================================================

@@ -25,11 +25,13 @@ import { AppError } from './types';
 
 // Repositories
 import { DealRepository } from './repositories/deal.repository';
+import { WorkspaceRepository } from './repositories/workspace.repository';
 
 // Services
 import { DealService } from './services/deal.service';
 import { AIService } from './services/ai.service';
 import { InsightService } from './services/insight.service';
+import { WorkspaceService } from './services/workspace.service';
 
 // Initialize Prisma
 const prisma = new PrismaClient({
@@ -101,10 +103,12 @@ if (config.enableRateLimiting) {
 
 // Repositories
 const dealRepository = new DealRepository(prisma);
+const workspaceRepository = new WorkspaceRepository(prisma);
 
 // Services
 const aiService = new AIService();
-const insightService = new InsightService();
+const insightService = new InsightService(prisma, aiService);
+const workspaceService = new WorkspaceService(workspaceRepository);
 const dealService = new DealService(dealRepository, aiService, insightService);
 
 // Store in app.locals for access in routes
@@ -112,10 +116,12 @@ app.locals.services = {
   dealService,
   aiService,
   insightService,
+  workspaceService,
 };
 
 app.locals.repositories = {
   dealRepository,
+  workspaceRepository,
 };
 
 // ============================================================================
@@ -168,7 +174,182 @@ app.get('/api/v1', (_req: Request, res: Response) => {
   });
 });
 
+// ============================================================================
+// Workspace Routes
+// ============================================================================
+
+// Get user's workspaces
+app.get('/api/v1/users/:userId/workspaces', async (req: Request, res: Response) => {
+  const { userId } = req.params;
+
+  const result = await workspaceService.getByUserId(userId);
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.json({
+    success: true,
+    data: result.data,
+  });
+});
+
+// Get workspace by ID
+app.get('/api/v1/workspaces/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const result = await workspaceService.getById(id);
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.json({
+    success: true,
+    data: result.data,
+  });
+});
+
+// Get workspace by slug
+app.get('/api/v1/workspaces/slug/:slug', async (req: Request, res: Response) => {
+  const { slug } = req.params;
+
+  const result = await workspaceService.getBySlug(slug);
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.json({
+    success: true,
+    data: result.data,
+  });
+});
+
+// Create workspace
+app.post('/api/v1/workspaces', async (req: Request, res: Response) => {
+  const { name, slug, ownerId, tier, userName } = req.body;
+
+  // If ownerId looks like an email, find or create user first
+  let finalOwnerId = ownerId;
+
+  if (ownerId && ownerId.includes('@')) {
+    // ownerId is an email - look up or create user
+    try {
+      let user = await prisma.user.findUnique({
+        where: { email: ownerId },
+      });
+
+      if (!user) {
+        // Create new user
+        user = await prisma.user.create({
+          data: {
+            email: ownerId,
+            name: userName || ownerId.split('@')[0],
+          },
+        });
+      }
+
+      finalOwnerId = user.id;
+    } catch (error) {
+      appLogger.error('Failed to create/find user', error as Error);
+      return res.status(500).json({
+        success: false,
+        error: {
+          code: 'USER_ERROR',
+          message: 'Failed to create or find user',
+        },
+      });
+    }
+  }
+
+  const result = await workspaceService.create({
+    name,
+    slug,
+    ownerId: finalOwnerId,
+    tier,
+  });
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.status(201).json({
+    success: true,
+    data: result.data,
+  });
+});
+
+// Update workspace
+app.patch('/api/v1/workspaces/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { userId } = req.body; // In production, get from auth token
+  const { name, slug, tier } = req.body;
+
+  const result = await workspaceService.update(id, userId, {
+    name,
+    slug,
+    tier,
+  });
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.json({
+    success: true,
+    data: result.data,
+  });
+});
+
+// Delete workspace
+app.delete('/api/v1/workspaces/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { userId } = req.body; // In production, get from auth token
+
+  const result = await workspaceService.delete(id, userId);
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.status(204).send();
+});
+
+// Add member to workspace
+app.post('/api/v1/workspaces/:id/members', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { requesterId, userId, role } = req.body;
+
+  const result = await workspaceService.addMember(id, requesterId, userId, role);
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.status(201).json({
+    success: true,
+    message: 'Member added successfully',
+  });
+});
+
+// Remove member from workspace
+app.delete('/api/v1/workspaces/:id/members/:userId', async (req: Request, res: Response) => {
+  const { id, userId } = req.params;
+  const { requesterId } = req.body;
+
+  const result = await workspaceService.removeMember(id, requesterId, userId);
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.status(204).send();
+});
+
+// ============================================================================
 // Deals Routes
+// ============================================================================
 app.get('/api/v1/workspaces/:workspaceId/deals', async (req: Request, res: Response) => {
   const { workspaceId } = req.params;
   const { page = '1', limit = '20', sortBy, sortOrder } = req.query;
@@ -297,6 +478,66 @@ app.post('/api/v1/ai/chat', async (req: Request, res: Response) => {
   });
 });
 
+// Generate AI insights for workspace
+app.post('/api/v1/workspaces/:workspaceId/insights/generate', async (req: Request, res: Response) => {
+  const { workspaceId } = req.params;
+
+  const insights = await insightService.generateWorkspaceInsights(workspaceId);
+
+  res.json({
+    success: true,
+    data: insights,
+  });
+});
+
+// Get all insights for workspace
+app.get('/api/v1/workspaces/:workspaceId/insights', async (req: Request, res: Response) => {
+  const { workspaceId } = req.params;
+
+  const insights = await insightService.getWorkspaceInsights(workspaceId);
+
+  res.json({
+    success: true,
+    data: insights,
+  });
+});
+
+// Mark insight as viewed
+app.patch('/api/v1/insights/:insightId/viewed', async (req: Request, res: Response) => {
+  const { insightId } = req.params;
+
+  const insight = await insightService.markAsViewed(insightId);
+
+  res.json({
+    success: true,
+    data: insight,
+  });
+});
+
+// Mark insight as actioned
+app.patch('/api/v1/insights/:insightId/actioned', async (req: Request, res: Response) => {
+  const { insightId } = req.params;
+
+  const insight = await insightService.markAsActioned(insightId);
+
+  res.json({
+    success: true,
+    data: insight,
+  });
+});
+
+// Dismiss insight
+app.patch('/api/v1/insights/:insightId/dismiss', async (req: Request, res: Response) => {
+  const { insightId } = req.params;
+
+  const insight = await insightService.dismissInsight(insightId);
+
+  res.json({
+    success: true,
+    data: insight,
+  });
+});
+
 // ============================================================================
 // Error Handling
 // ============================================================================
@@ -359,18 +600,27 @@ async function startServer() {
     }
 
     // Start server
-    app.listen(PORT, () => {
-      appLogger.info('VectorOS Backend started', {
-        port: PORT,
-        environment: config.nodeEnv,
-        nodeVersion: process.version,
+    console.log(`[DEBUG] About to start listening on port ${PORT}...`);
+    await new Promise<void>((resolve, reject) => {
+      const server = app.listen(PORT, () => {
+        appLogger.info('VectorOS Backend started', {
+          port: PORT,
+          environment: config.nodeEnv,
+          nodeVersion: process.version,
+        });
+
+        if (config.nodeEnv === 'development') {
+          console.log(`\n🚀 VectorOS Backend running at http://localhost:${PORT}`);
+          console.log(`📊 Health check: http://localhost:${PORT}/health`);
+          console.log(`📖 API docs: http://localhost:${PORT}/api/v1\n`);
+        }
+        resolve();
       });
 
-      if (config.nodeEnv === 'development') {
-        console.log(`\n🚀 VectorOS Backend running at http://localhost:${PORT}`);
-        console.log(`📊 Health check: http://localhost:${PORT}/health`);
-        console.log(`📖 API docs: http://localhost:${PORT}/api/v1\n`);
-      }
+      server.on('error', (err: any) => {
+        console.error(`[DEBUG] Server error:`, err);
+        reject(err);
+      });
     });
   } catch (error) {
     appLogger.error('Failed to start server', error as Error);
