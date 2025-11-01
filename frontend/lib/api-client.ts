@@ -49,6 +49,33 @@ export interface DealAnalysis {
   next_best_action?: string;
 }
 
+export interface DealScore {
+  health_score: number;
+  health_status: 'excellent' | 'good' | 'fair' | 'poor' | 'critical';
+  components: {
+    probability: number;
+    velocity: number;
+    freshness: number;
+    completeness: number;
+    urgency: number;
+    value_score: number;
+  };
+  insights: string[];
+}
+
+export interface WorkspaceScoreMetrics {
+  average_health: number;
+  total_deals: number;
+  scored_deals: number;
+  health_distribution: {
+    excellent: number;
+    good: number;
+    fair: number;
+    poor: number;
+    critical: number;
+  };
+}
+
 export interface Workspace {
   id: string;
   name: string;
@@ -103,6 +130,14 @@ class APIClient {
             code: 'UNKNOWN_ERROR',
             message: 'An error occurred',
           },
+        };
+      }
+
+      // Handle AI service responses that already include success field
+      if (data.success !== undefined) {
+        return {
+          success: data.success,
+          data: data,
         };
       }
 
@@ -195,6 +230,35 @@ class APIClient {
   async analyzeDeal(dealId: string): Promise<ApiResponse<DealAnalysis>> {
     return this.request<DealAnalysis>(`${API_BASE_URL}/api/v1/deals/${dealId}/analyze`, {
       method: 'POST',
+    });
+  }
+
+  // Score a single deal
+  async scoreDeal(deal: Deal, workspaceDeals?: Deal[]): Promise<ApiResponse<DealScore>> {
+    return this.request<DealScore>(`${AI_BASE_URL}/api/v1/deals/score`, {
+      method: 'POST',
+      body: JSON.stringify({
+        deal,
+        workspace_deals: workspaceDeals || []
+      }),
+    });
+  }
+
+  // Score all deals in workspace
+  async scoreWorkspaceDeals(deals: Deal[]): Promise<ApiResponse<{
+    scored_deals: Array<{
+      deal_id: string;
+      title: string;
+      health_score: number;
+      health_status: string;
+      components: DealScore['components'];
+      insights: string[];
+    }>;
+    workspace_metrics: WorkspaceScoreMetrics;
+  }>> {
+    return this.request(`${AI_BASE_URL}/api/v1/deals/score-workspace`, {
+      method: 'POST',
+      body: JSON.stringify({ deals }),
     });
   }
 

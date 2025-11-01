@@ -525,6 +525,155 @@ async def analyze_workspace_insights(
         )
 
 
+@app.post("/api/v1/deals/score", tags=["AI"])
+async def score_deal(
+    request: Request,
+    data: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    Calculate automated health score for a single deal
+
+    This endpoint scores a deal based on:
+    - Win probability
+    - Pipeline velocity (days in stage)
+    - Deal freshness (age)
+    - Data completeness
+    - Close date urgency
+    - Relative deal value
+
+    Request body:
+    {
+        "deal": {...},  // Deal object to score
+        "workspace_deals": [...]  // Optional: all workspace deals for relative scoring
+    }
+
+    Returns:
+    {
+        "success": true,
+        "health_score": 75.5,
+        "health_status": "good",
+        "components": {...},
+        "insights": [...]
+    }
+    """
+    logger = get_logger("deal_scoring")
+
+    try:
+        deal = data.get("deal")
+        workspace_deals = data.get("workspace_deals", [])
+
+        if not deal:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Deal data is required"
+            )
+
+        logger.info(f"Scoring deal: {deal.get('id')} - {deal.get('title')}")
+
+        # Use our deal scorer service
+        from .services.deal_scorer import DealScorer
+        scorer = DealScorer()
+
+        score_result = scorer.score_deal(deal, workspace_deals if workspace_deals else None)
+
+        logger.info(f"Deal scored: {score_result['health_score']}/100 ({score_result['health_status']})")
+
+        return {
+            "success": True,
+            **score_result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Deal scoring failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@app.post("/api/v1/deals/score-workspace", tags=["AI"])
+async def score_workspace_deals(
+    request: Request,
+    data: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    Calculate health scores for all deals in a workspace
+
+    This endpoint scores all deals and provides workspace-level metrics:
+    - Individual deal scores
+    - Average workspace health
+    - Health distribution
+    - Deals needing attention
+
+    Request body:
+    {
+        "deals": [...]  // Array of deal objects
+    }
+
+    Returns:
+    {
+        "success": true,
+        "scored_deals": [...],
+        "workspace_metrics": {
+            "average_health": 68.5,
+            "total_deals": 50,
+            "scored_deals": 48,
+            "health_distribution": {
+                "excellent": 10,
+                "good": 20,
+                "fair": 12,
+                "poor": 4,
+                "critical": 2
+            }
+        }
+    }
+    """
+    logger = get_logger("workspace_scoring")
+
+    try:
+        deals = data.get("deals", [])
+
+        if not deals:
+            return {
+                "success": True,
+                "scored_deals": [],
+                "workspace_metrics": {
+                    "average_health": 0,
+                    "total_deals": 0,
+                    "scored_deals": 0,
+                    "health_distribution": {}
+                },
+                "message": "No deals to score"
+            }
+
+        logger.info(f"Scoring {len(deals)} deals in workspace")
+
+        # Use our deal scorer service
+        from .services.deal_scorer import DealScorer
+        scorer = DealScorer()
+
+        result = scorer.score_workspace(deals)
+
+        logger.info(
+            f"Workspace scored: {result['workspace_metrics']['average_health']:.1f} avg health, "
+            f"{result['workspace_metrics']['scored_deals']}/{result['workspace_metrics']['total_deals']} deals"
+        )
+
+        return {
+            "success": True,
+            **result
+        }
+
+    except Exception as e:
+        logger.error(f"Workspace scoring failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
 # ============================================================================
 # Application Entry Point
 # ============================================================================

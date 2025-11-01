@@ -7,6 +7,11 @@
 
 import { useEffect, useState } from 'react';
 import { apiClient, type PipelineMetrics, type Deal } from '@/lib/api-client';
+import DashboardHeader from '../components/dashboard/DashboardHeader';
+import MetricCard from '../components/dashboard/MetricCard';
+import PipelineStages from '../components/dashboard/PipelineStages';
+import DealsList from '../components/dashboard/DealsList';
+import AIInsightsCard from '../components/dashboard/AIInsightsCard';
 
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<PipelineMetrics | null>(null);
@@ -20,15 +25,9 @@ export default function DashboardPage() {
   useEffect(() => {
     // Get workspace ID from localStorage
     const storedWorkspaceId = localStorage.getItem('currentWorkspaceId');
-    const storedUserEmail = localStorage.getItem('currentUserEmail');
-
-    if (!storedWorkspaceId) {
-      setError('No workspace found. Please complete onboarding first.');
-      setLoading(false);
-      return;
-    }
-
-    setWorkspaceId(storedWorkspaceId);
+    // For demo/development: Use demo workspace if no workspace is set
+    const workspaceToUse = storedWorkspaceId || '4542c01f-fa18-41fc-b232-e6d15a2ef0cd';
+    setWorkspaceId(workspaceToUse);
   }, []);
 
   useEffect(() => {
@@ -55,14 +54,20 @@ export default function DashboardPage() {
     try {
       // Load metrics
       const metricsResponse = await apiClient.getPipelineMetrics(workspaceId);
+      console.log('[Dashboard] Metrics response:', metricsResponse);
       if (metricsResponse.success && metricsResponse.data) {
-        setMetrics(metricsResponse.data);
+        // Handle nested data structure from API wrapper
+        const metricsData = metricsResponse.data.data || metricsResponse.data;
+        console.log('[Dashboard] Setting metrics:', metricsData);
+        setMetrics(metricsData);
       }
 
       // Load deals
       const dealsResponse = await apiClient.getDeals(workspaceId, 1, 10);
       if (dealsResponse.success && dealsResponse.data) {
-        setDeals(dealsResponse.data.items || []);
+        // Handle nested data structure from API wrapper
+        const items = dealsResponse.data.data?.items || dealsResponse.data.items || [];
+        setDeals(items);
       }
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
@@ -95,38 +100,17 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                VectorOS Dashboard
-              </h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                AI-Powered Business Operating System
-              </p>
-            </div>
+    <div className="min-h-screen bg-gray-50">
+      <DashboardHeader backendHealth={backendHealth} aiHealth={aiHealth} activePage="dashboard" />
 
-            {/* System Status */}
-            <div className="flex items-center space-x-4">
-              <StatusIndicator label="Backend" healthy={backendHealth} />
-              <StatusIndicator label="AI Core" healthy={aiHealth} />
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-8 py-8">
         {error ? (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-red-900 dark:text-red-200 mb-2">Error</h3>
-            <p className="text-red-700 dark:text-red-300">{error}</p>
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-8">
+            <h3 className="text-lg font-normal text-red-900 mb-2">Error</h3>
+            <p className="text-sm font-light text-red-700 mb-4">{error}</p>
             <a
               href="/onboarding"
-              className="mt-4 inline-block px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+              className="inline-block px-6 py-2.5 bg-red-600 text-white text-sm font-light rounded-lg hover:bg-red-700 transition-colors"
             >
               Go to Onboarding
             </a>
@@ -134,12 +118,12 @@ export default function DashboardPage() {
         ) : loading && !metrics ? (
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600 dark:text-gray-400">Loading dashboard...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-2 border-peach-500 border-t-transparent mx-auto"></div>
+              <p className="mt-4 text-sm font-light text-gray-600">Loading dashboard...</p>
             </div>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-8">
             {/* Metrics Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <MetricCard
@@ -174,181 +158,20 @@ export default function DashboardPage() {
 
             {/* Pipeline Stages */}
             {metrics && metrics.stageDistribution && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Pipeline by Stage
-                </h2>
-                <div className="space-y-3">
-                  {Object.entries(metrics.stageDistribution).map(([stage, count]) => (
-                    <StageBar key={stage} stage={stage} count={count as number} total={metrics.totalDeals} />
-                  ))}
-                </div>
-              </div>
+              <PipelineStages
+                stageDistribution={metrics.stageDistribution}
+                totalDeals={metrics.totalDeals}
+              />
             )}
 
-            {/* Recent Deals */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Recent Deals
-                </h2>
-              </div>
-              <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                {deals.length > 0 ? (
-                  deals.map((deal) => (
-                    <DealRow key={deal.id} deal={deal} />
-                  ))
-                ) : (
-                  <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
-                    No deals found. Create your first deal to get started.
-                  </div>
-                )}
-              </div>
-            </div>
+            {/* AI Insights Card */}
+            <AIInsightsCard />
 
-            {/* AI Insights Link */}
-            <a
-              href="/insights"
-              className="block bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg shadow p-6 text-white hover:from-blue-600 hover:to-purple-700 transition"
-            >
-              <div className="flex items-center space-x-3">
-                <div className="flex-shrink-0">
-                  <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold">AI Insights Dashboard</h3>
-                  <p className="text-blue-100">
-                    Get Claude AI-powered recommendations and strategic analysis
-                  </p>
-                </div>
-                <div className="px-4 py-2 bg-white text-blue-600 rounded-lg font-medium">
-                  View Insights →
-                </div>
-              </div>
-            </a>
+            {/* Recent Deals */}
+            <DealsList deals={deals} />
           </div>
         )}
       </main>
-    </div>
-  );
-}
-
-// ============================================================================
-// Components
-// ============================================================================
-
-function StatusIndicator({ label, healthy }: { label: string; healthy: boolean }) {
-  return (
-    <div className="flex items-center space-x-2">
-      <div className={`h-2 w-2 rounded-full ${healthy ? 'bg-green-500' : 'bg-red-500'}`} />
-      <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
-    </div>
-  );
-}
-
-function MetricCard({
-  title,
-  value,
-  subtitle,
-  trend,
-  trendUp,
-}: {
-  title: string;
-  value: string;
-  subtitle: string;
-  trend: string;
-  trendUp: boolean;
-}) {
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      <div className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</div>
-      <div className="mt-2 flex items-baseline space-x-2">
-        <div className="text-3xl font-bold text-gray-900 dark:text-white">{value}</div>
-        <span className={`text-sm font-medium ${trendUp ? 'text-green-600' : 'text-red-600'}`}>
-          {trend}
-        </span>
-      </div>
-      <div className="mt-1 text-sm text-gray-500 dark:text-gray-400">{subtitle}</div>
-    </div>
-  );
-}
-
-function StageBar({ stage, count, total }: { stage: string; count: number; total: number }) {
-  const percentage = total > 0 ? (count / total) * 100 : 0;
-
-  const stageColors: Record<string, string> = {
-    lead: 'bg-gray-400',
-    qualified: 'bg-blue-500',
-    proposal: 'bg-yellow-500',
-    negotiation: 'bg-orange-500',
-    won: 'bg-green-500',
-    lost: 'bg-red-500',
-  };
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
-          {stage}
-        </span>
-        <span className="text-sm text-gray-500 dark:text-gray-400">
-          {count} ({percentage.toFixed(0)}%)
-        </span>
-      </div>
-      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-        <div
-          className={`h-2 rounded-full ${stageColors[stage] || 'bg-gray-400'}`}
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function DealRow({ deal }: { deal: Deal }) {
-  const stageColors: Record<string, string> = {
-    lead: 'bg-gray-100 text-gray-800',
-    qualified: 'bg-blue-100 text-blue-800',
-    proposal: 'bg-yellow-100 text-yellow-800',
-    negotiation: 'bg-orange-100 text-orange-800',
-    won: 'bg-green-100 text-green-800',
-    lost: 'bg-red-100 text-red-800',
-  };
-
-  return (
-    <div className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-      <div className="flex items-center justify-between">
-        <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-medium text-gray-900 dark:text-white truncate">
-            {deal.title}
-          </h3>
-          <div className="mt-1 flex items-center space-x-3 text-sm text-gray-500 dark:text-gray-400">
-            {deal.company && <span>{deal.company}</span>}
-            {deal.contactName && <span>· {deal.contactName}</span>}
-          </div>
-        </div>
-        <div className="flex items-center space-x-4">
-          <div className="text-right">
-            <div className="text-sm font-semibold text-gray-900 dark:text-white">
-              ${deal.value?.toLocaleString() || '0'}
-            </div>
-            {deal.probability && (
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                {deal.probability}% prob
-              </div>
-            )}
-          </div>
-          <span
-            className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
-              stageColors[deal.stage] || stageColors.lead
-            }`}
-          >
-            {deal.stage}
-          </span>
-        </div>
-      </div>
     </div>
   );
 }

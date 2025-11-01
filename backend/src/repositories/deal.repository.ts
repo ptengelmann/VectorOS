@@ -166,7 +166,7 @@ export class DealRepository extends BaseRepository<Deal> {
       return acc;
     }, {} as Record<string, number>);
 
-    const wonDeals = deals.filter(d => d.stage === 'won').length;
+    const wonDeals = deals.filter(d => d.stage === 'closed_won' || d.stage === 'won').length;
     const conversionRate = totalDeals > 0 ? wonDeals / totalDeals : 0;
 
     return {
