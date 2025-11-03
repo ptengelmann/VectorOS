@@ -43,9 +43,17 @@ export default function DealsPage() {
 
   useEffect(() => {
     const storedWorkspaceId = localStorage.getItem('currentWorkspaceId');
-    // For demo/development: Use demo workspace if no workspace is set
-    const workspaceToUse = storedWorkspaceId || '4542c01f-fa18-41fc-b232-e6d15a2ef0cd';
-    setWorkspaceId(workspaceToUse);
+    console.log('[Deals] Checking workspace ID from localStorage:', storedWorkspaceId);
+
+    // If no workspace, redirect to onboarding
+    if (!storedWorkspaceId) {
+      console.log('[Deals] No workspace found, redirecting to onboarding');
+      window.location.href = '/onboarding';
+      return;
+    }
+
+    console.log('[Deals] Setting workspace ID:', storedWorkspaceId);
+    setWorkspaceId(storedWorkspaceId);
     checkSystemHealth();
   }, []);
 
@@ -153,14 +161,22 @@ export default function DealsPage() {
   };
 
   const handleCreateDeal = async (dealId: string, dealData: Partial<Deal>) => {
-    if (!workspaceId) return;
+    if (!workspaceId) {
+      console.error('[CreateDeal] No workspace ID available');
+      alert('No workspace selected. Please refresh the page and try again.');
+      return;
+    }
 
+    console.log('[CreateDeal] Creating deal with workspace:', workspaceId);
     const response = await apiClient.createDeal(workspaceId, dealData);
 
     if (response.success && response.data) {
       // Add new deal to the list
       setDeals(prevDeals => [response.data!, ...prevDeals]);
       setIsCreateModalOpen(false);
+    } else {
+      console.error('[CreateDeal] Failed:', response.error);
+      alert(`Failed to create deal: ${response.error?.message || 'Unknown error'}`);
     }
   };
 
