@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { UserButton } from '@clerk/nextjs';
 
 interface DashboardHeaderProps {
   backendHealth: boolean;
@@ -52,15 +53,20 @@ export default function DashboardHeader({ backendHealth, aiHealth, activePage = 
             </nav>
           </div>
 
-          {/* Right: System Status */}
+          {/* Right: System Status & User */}
           <div className="flex items-center gap-6">
             <StatusIndicator label="Backend" healthy={backendHealth} />
             <StatusIndicator label="AI" healthy={aiHealth} />
 
-            <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-              <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
+            <div className="border-l border-gray-200 pl-6">
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: "w-8 h-8",
+                  }
+                }}
+                afterSignOutUrl="/"
+              />
             </div>
           </div>
         </div>

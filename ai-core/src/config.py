@@ -3,16 +3,20 @@ VectorOS AI Core Configuration
 Enterprise-grade configuration management with validation
 """
 import os
+from pathlib import Path
 from typing import Optional
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Get the .env file path relative to this config file
+ENV_FILE = Path(__file__).parent.parent.parent / ".env"
 
 
 class Settings(BaseSettings):
     """Application settings with validation and type safety"""
 
     model_config = SettingsConfigDict(
-        env_file="../.env",
+        env_file=str(ENV_FILE),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore"
@@ -30,7 +34,7 @@ class Settings(BaseSettings):
 
     # AI Configuration
     anthropic_api_key: str = Field(..., min_length=1)
-    ai_model: str = "claude-sonnet-4-5-20250929"  # Claude Sonnet 4.5 (latest)
+    ai_model: str = "claude-sonnet-4-5-20250929"  # VectorOS AI Engine
     ai_temperature: float = 0.7
     ai_max_tokens: int = 4096
     ai_timeout: int = 120

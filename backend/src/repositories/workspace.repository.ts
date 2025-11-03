@@ -75,7 +75,7 @@ export class WorkspaceRepository {
     // Check if slug already exists
     const existing = await this.findBySlug(data.slug);
     if (existing) {
-      throw new AppError('VALIDATION_ERROR', 'Workspace slug already exists', 400);
+      throw new AppError('Workspace slug already exists', 400, 'VALIDATION_ERROR');
     }
 
     return this.prisma.workspace.create({
@@ -93,7 +93,7 @@ export class WorkspaceRepository {
     if (data.slug) {
       const existing = await this.findBySlug(data.slug);
       if (existing && existing.id !== id) {
-        throw new AppError('VALIDATION_ERROR', 'Workspace slug already exists', 400);
+        throw new AppError('Workspace slug already exists', 400, 'VALIDATION_ERROR');
       }
     }
 

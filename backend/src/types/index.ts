@@ -140,6 +140,9 @@ export interface ServiceResponse<T = any> {
   };
 }
 
+// Alias for backwards compatibility
+export type ServiceResult<T = any> = ServiceResponse<T>;
+
 export interface CreateDealData {
   title: string;
   value?: number;

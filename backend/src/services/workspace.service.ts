@@ -6,7 +6,7 @@
 import { Workspace } from '@prisma/client';
 import { WorkspaceRepository, CreateWorkspaceInput, UpdateWorkspaceInput } from '../repositories/workspace.repository';
 import { AppError, ServiceResult } from '../types';
-import { logger } from '../utils/logger';
+import { appLogger as logger } from '../utils/logger';
 
 export interface CreateWorkspaceDTO {
   name: string;
@@ -75,7 +75,7 @@ export class WorkspaceService {
         data: workspace,
       };
     } catch (error) {
-      logger.error('Failed to get workspace', { id, error });
+      logger.error('Failed to get workspace', error as Error, { id });
       return {
         success: false,
         error: {
@@ -110,7 +110,7 @@ export class WorkspaceService {
         data: workspace,
       };
     } catch (error) {
-      logger.error('Failed to get workspace by slug', { slug, error });
+      logger.error('Failed to get workspace by slug', error as Error, { slug });
       return {
         success: false,
         error: {
@@ -134,7 +134,7 @@ export class WorkspaceService {
         data: workspaces,
       };
     } catch (error) {
-      logger.error('Failed to get user workspaces', { userId, error });
+      logger.error('Failed to get user workspaces', error as Error, { userId });
       return {
         success: false,
         error: {
@@ -271,7 +271,7 @@ export class WorkspaceService {
         data: updated,
       };
     } catch (error) {
-      logger.error('Failed to update workspace', { id, data, error });
+      logger.error('Failed to update workspace', error as Error, { id });
 
       if (error instanceof AppError) {
         return {
@@ -335,7 +335,7 @@ export class WorkspaceService {
         success: true,
       };
     } catch (error) {
-      logger.error('Failed to delete workspace', { id, userId, error });
+      logger.error('Failed to delete workspace', error as Error, { id, userId });
       return {
         success: false,
         error: {
@@ -387,7 +387,7 @@ export class WorkspaceService {
         success: true,
       };
     } catch (error) {
-      logger.error('Failed to add member', { workspaceId, userId, error });
+      logger.error('Failed to add member', error as Error, { workspaceId, userId });
       return {
         success: false,
         error: {
@@ -449,7 +449,7 @@ export class WorkspaceService {
         success: true,
       };
     } catch (error) {
-      logger.error('Failed to remove member', { workspaceId, userId, error });
+      logger.error('Failed to remove member', error as Error, { workspaceId, userId });
       return {
         success: false,
         error: {
@@ -468,7 +468,7 @@ export class WorkspaceService {
     try {
       return await this.workspaceRepository.hasAccess(workspaceId, userId);
     } catch (error) {
-      logger.error('Failed to check workspace access', { workspaceId, userId, error });
+      logger.error('Failed to check workspace access', error as Error, { workspaceId, userId });
       return false;
     }
   }

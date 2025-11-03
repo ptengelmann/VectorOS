@@ -1,34 +1,32 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
 import { apiClient } from '@/lib/api-client';
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState(1);
+  const { user, isLoaded } = useUser();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [workspaceName, setWorkspaceName] = useState('');
 
-  const [formData, setFormData] = useState({
-    workspaceName: '',
-    userName: '',
-    userEmail: '',
-  });
-
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    setError('');
-  };
+  // Redirect if user is not authenticated
+  useEffect(() => {
+    if (isLoaded && !user) {
+      router.push('/sign-in');
+    }
+  }, [isLoaded, user, router]);
 
   const handleCreateWorkspace = async () => {
-    if (!formData.workspaceName.trim()) {
-      setError('Workspace name is required');
+    if (!user) {
+      setError('You must be signed in to create a workspace');
       return;
     }
 
-    if (!formData.userEmail.trim()) {
-      setError('Email is required');
+    if (!workspaceName.trim()) {
+      setError('Workspace name is required');
       return;
     }
 
@@ -36,21 +34,23 @@ export default function OnboardingPage() {
     setError('');
 
     try {
-      // For demo, use email as userId (in production, use proper auth)
-      const userId = formData.userEmail;
+      const userId = user.id; // Use Clerk user ID
+      const userName = user.fullName || user.firstName || 'User';
+      const userEmail = user.primaryEmailAddress?.emailAddress || '';
 
       const result = await apiClient.createWorkspace(
         userId,
-        { name: formData.workspaceName },
-        formData.userName
+        { name: workspaceName },
+        userName,
+        userEmail
       );
 
       if (result.success && result.data) {
-        // Store workspace ID and user email in localStorage for demo
+        // Store workspace ID and user info in localStorage
         localStorage.setItem('currentWorkspaceId', result.data.id);
         localStorage.setItem('currentUserId', userId);
-        localStorage.setItem('currentUserEmail', formData.userEmail);
-        localStorage.setItem('currentUserName', formData.userName || 'User');
+        localStorage.setItem('currentUserEmail', userEmail);
+        localStorage.setItem('currentUserName', userName);
 
         // Redirect to dashboard
         router.push('/dashboard');
@@ -65,6 +65,23 @@ export default function OnboardingPage() {
     }
   };
 
+  // Show loading state while Clerk loads
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-peach-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 font-light">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If no user, useEffect will redirect to sign-in
+  if (!user) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-2xl">
@@ -74,31 +91,29 @@ export default function OnboardingPage() {
           <span className="text-2xl font-light tracking-tight text-gray-900">VectorOS</span>
         </div>
 
-        {/* Progress Bar */}
-        <div className="mb-8">
-          <div className="flex justify-between items-center mb-3">
-            <span className="text-sm font-light text-gray-600">Step {step} of 2</span>
-            <span className="text-sm font-light text-gray-600">{step === 1 ? 'Account Info' : 'Workspace Setup'}</span>
-          </div>
-          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-peach-500 transition-all duration-300"
-              style={{ width: `${(step / 2) * 100}%` }}
-            />
-          </div>
-        </div>
-
         {/* Onboarding Card */}
         <div className="bg-white border border-gray-200 rounded-2xl p-10 shadow-sm">
-          <div className="mb-8">
+          {/* User Info Display */}
+          <div className="mb-8 pb-6 border-b border-gray-100">
             <h1 className="text-3xl font-light text-gray-900 mb-2">
-              Welcome to VectorOS
+              Welcome, {user.firstName || 'there'}!
             </h1>
-            <p className="text-sm font-light text-gray-600">
-              {step === 1
-                ? "Let's start by setting up your account"
-                : "Now create your first workspace"}
+            <p className="text-sm font-light text-gray-600 mb-4">
+              Let's create your first workspace to get started
             </p>
+            <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-lg">
+              <div className="w-10 h-10 bg-peach-500 rounded-full flex items-center justify-center text-white font-medium">
+                {(user.firstName?.[0] || user.emailAddresses[0]?.emailAddress[0] || 'U').toUpperCase()}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">
+                  {user.fullName || user.firstName || 'User'}
+                </p>
+                <p className="text-xs font-light text-gray-600">
+                  {user.primaryEmailAddress?.emailAddress || 'No email'}
+                </p>
+              </div>
+            </div>
           </div>
 
           {error && (
@@ -107,88 +122,41 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {step === 1 ? (
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-light text-gray-700 mb-2">
-                  Your Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.userName}
-                  onChange={(e) => handleInputChange('userName', e.target.value)}
-                  placeholder="John Doe"
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 font-light focus:outline-none focus:ring-2 focus:ring-peach-500 focus:border-transparent transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-light text-gray-700 mb-2">
-                  Email Address *
-                </label>
-                <input
-                  type="email"
-                  value={formData.userEmail}
-                  onChange={(e) => handleInputChange('userEmail', e.target.value)}
-                  placeholder="john@company.com"
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 font-light focus:outline-none focus:ring-2 focus:ring-peach-500 focus:border-transparent transition-all"
-                  required
-                />
-                <p className="mt-2 text-xs font-light text-gray-500">
-                  We'll use this to identify your account
-                </p>
-              </div>
-
-              <button
-                onClick={() => {
-                  if (!formData.userEmail.trim()) {
-                    setError('Email is required');
-                    return;
-                  }
-                  setStep(2);
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-light text-gray-700 mb-2">
+                Workspace Name *
+              </label>
+              <input
+                type="text"
+                value={workspaceName}
+                onChange={(e) => {
+                  setWorkspaceName(e.target.value);
+                  setError('');
                 }}
-                className="w-full py-3 bg-peach-500 hover:bg-peach-600 text-white font-light rounded-lg transition-colors"
-              >
-                Continue
-              </button>
+                placeholder="My Company"
+                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 font-light focus:outline-none focus:ring-2 focus:ring-peach-500 focus:border-transparent transition-all"
+                required
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !loading) {
+                    handleCreateWorkspace();
+                  }
+                }}
+              />
+              <p className="mt-2 text-xs font-light text-gray-500">
+                A workspace is where your team collaborates on deals
+              </p>
             </div>
-          ) : (
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-light text-gray-700 mb-2">
-                  Workspace Name *
-                </label>
-                <input
-                  type="text"
-                  value={formData.workspaceName}
-                  onChange={(e) => handleInputChange('workspaceName', e.target.value)}
-                  placeholder="My Company"
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 font-light focus:outline-none focus:ring-2 focus:ring-peach-500 focus:border-transparent transition-all"
-                  required
-                />
-                <p className="mt-2 text-xs font-light text-gray-500">
-                  A workspace is where your team collaborates on deals
-                </p>
-              </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setStep(1)}
-                  className="flex-1 py-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-light rounded-lg transition-colors"
-                  disabled={loading}
-                >
-                  Back
-                </button>
-                <button
-                  onClick={handleCreateWorkspace}
-                  disabled={loading}
-                  className="flex-1 py-3 bg-peach-500 hover:bg-peach-600 text-white font-light rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Creating...' : 'Create Workspace'}
-                </button>
-              </div>
-            </div>
-          )}
+            <button
+              onClick={handleCreateWorkspace}
+              disabled={loading}
+              className="w-full py-3 bg-peach-500 hover:bg-peach-600 text-white font-light rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Creating workspace...' : 'Create Workspace'}
+            </button>
+          </div>
 
           {/* Features Preview */}
           <div className="mt-8 pt-8 border-t border-gray-100">
@@ -202,7 +170,7 @@ export default function OnboardingPage() {
                 </div>
                 <div>
                   <p className="text-sm font-normal text-gray-900">AI-Powered Insights</p>
-                  <p className="text-xs font-light text-gray-500">Claude Sonnet 4.5 analysis</p>
+                  <p className="text-xs font-light text-gray-500">VectorOS Intelligence</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">

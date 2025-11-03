@@ -40,13 +40,34 @@ export interface PipelineMetrics {
 
 export interface DealAnalysis {
   deal_id: string;
-  overall_score: number;
-  win_probability: number;
-  health_status: string;
-  strengths: string[];
-  risks: string[];
-  recommended_actions: string[];
-  next_best_action?: string;
+  deal_title: string;
+  analyzed_at: string;
+  analysis: {
+    executive_summary: string;
+    win_probability: number;
+    win_probability_reasoning: string;
+    strengths: string[];
+    risks: Array<{
+      risk: string;
+      severity: 'high' | 'medium' | 'low';
+      mitigation: string;
+    }>;
+    next_best_actions: Array<{
+      action: string;
+      priority: 'critical' | 'high' | 'medium' | 'low';
+      expected_impact: string;
+      timeline: string;
+    }>;
+    competitive_insights: string;
+    timing_analysis: string;
+    recommended_focus_areas: string[];
+    confidence_level: number;
+    error?: string;
+  };
+  metadata: {
+    model: string;
+    context_deals: number;
+  };
 }
 
 export interface DealScore {
@@ -107,6 +128,26 @@ export interface Insight {
   updatedAt: string;
 }
 
+export interface Activity {
+  id: string;
+  type: string; // email, call, meeting, note
+  subject?: string;
+  content?: string;
+  scheduledAt?: string;
+  completedAt?: string;
+  dealId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateActivityData {
+  type: string; // email, call, meeting, note
+  subject?: string;
+  content?: string;
+  scheduledAt?: Date | string;
+  completedAt?: Date | string;
+}
+
 class APIClient {
   private async request<T>(
     url: string,
@@ -165,13 +206,14 @@ class APIClient {
     return this.request<Workspace>(`${API_BASE_URL}/api/v1/workspaces/${workspaceId}`);
   }
 
-  async createWorkspace(userId: string, data: CreateWorkspaceData, userName?: string): Promise<ApiResponse<Workspace>> {
+  async createWorkspace(userId: string, data: CreateWorkspaceData, userName?: string, userEmail?: string): Promise<ApiResponse<Workspace>> {
     return this.request<Workspace>(`${API_BASE_URL}/api/v1/workspaces`, {
       method: 'POST',
       body: JSON.stringify({
         ...data,
         ownerId: userId,
         userName,
+        userEmail,
       }),
     });
   }
@@ -227,9 +269,13 @@ class APIClient {
     });
   }
 
-  async analyzeDeal(dealId: string): Promise<ApiResponse<DealAnalysis>> {
-    return this.request<DealAnalysis>(`${API_BASE_URL}/api/v1/deals/${dealId}/analyze`, {
+  async analyzeDealWithAI(deal: Deal, workspaceDeals?: Deal[]): Promise<ApiResponse<DealAnalysis>> {
+    return this.request<DealAnalysis>(`${AI_BASE_URL}/api/v1/deals/analyze`, {
       method: 'POST',
+      body: JSON.stringify({
+        deal,
+        workspace_deals: workspaceDeals || []
+      }),
     });
   }
 
@@ -315,6 +361,46 @@ class APIClient {
 
   async dismissInsight(insightId: string): Promise<ApiResponse<Insight>> {
     return this.request<Insight>(`${API_BASE_URL}/api/v1/insights/${insightId}/dismiss`, {
+      method: 'PATCH',
+    });
+  }
+
+  // ========================================================================
+  // Activities API
+  // ========================================================================
+
+  async getActivities(dealId: string, page = 1, limit = 20): Promise<ApiResponse<{ items: Activity[] }>> {
+    return this.request<{ items: Activity[] }>(
+      `${API_BASE_URL}/api/v1/deals/${dealId}/activities?page=${page}&limit=${limit}`
+    );
+  }
+
+  async getActivity(activityId: string): Promise<ApiResponse<Activity>> {
+    return this.request<Activity>(`${API_BASE_URL}/api/v1/activities/${activityId}`);
+  }
+
+  async createActivity(dealId: string, activity: CreateActivityData): Promise<ApiResponse<Activity>> {
+    return this.request<Activity>(`${API_BASE_URL}/api/v1/deals/${dealId}/activities`, {
+      method: 'POST',
+      body: JSON.stringify(activity),
+    });
+  }
+
+  async updateActivity(activityId: string, activity: Partial<CreateActivityData>): Promise<ApiResponse<Activity>> {
+    return this.request<Activity>(`${API_BASE_URL}/api/v1/activities/${activityId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(activity),
+    });
+  }
+
+  async deleteActivity(activityId: string): Promise<ApiResponse<void>> {
+    return this.request<void>(`${API_BASE_URL}/api/v1/activities/${activityId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async markActivityCompleted(activityId: string): Promise<ApiResponse<Activity>> {
+    return this.request<Activity>(`${API_BASE_URL}/api/v1/activities/${activityId}/complete`, {
       method: 'PATCH',
     });
   }

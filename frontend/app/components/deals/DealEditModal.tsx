@@ -44,8 +44,21 @@ export default function DealEditModal({ deal, isOpen, onClose, onSave }: DealEdi
         closeDate: deal.closeDate ? new Date(deal.closeDate).toISOString().split('T')[0] : '',
       });
       setErrors({});
+    } else {
+      // Creating a new deal - set defaults
+      setFormData({
+        title: '',
+        value: 0,
+        stage: 'lead',
+        probability: 50,
+        contactName: '',
+        contactEmail: '',
+        company: '',
+        closeDate: '',
+      });
+      setErrors({});
     }
-  }, [deal]);
+  }, [deal, isOpen]);
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -73,7 +86,7 @@ export default function DealEditModal({ deal, isOpen, onClose, onSave }: DealEdi
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!deal || !validateForm()) {
+    if (!validateForm()) {
       return;
     }
 
@@ -85,7 +98,7 @@ export default function DealEditModal({ deal, isOpen, onClose, onSave }: DealEdi
         updates.closeDate = new Date(updates.closeDate).toISOString();
       }
 
-      await onSave(deal.id, updates);
+      await onSave(deal?.id || 'new', updates);
       onClose();
     } catch (error) {
       console.error('Failed to save deal:', error);
@@ -107,7 +120,7 @@ export default function DealEditModal({ deal, isOpen, onClose, onSave }: DealEdi
     }
   };
 
-  if (!isOpen || !deal) return null;
+  if (!isOpen) return null;
 
   return (
     <>
@@ -124,9 +137,9 @@ export default function DealEditModal({ deal, isOpen, onClose, onSave }: DealEdi
           <div className="px-8 py-6 border-b border-gray-100">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-normal text-gray-900">Edit Deal</h2>
+                <h2 className="text-2xl font-normal text-gray-900">{deal ? 'Edit Deal' : 'Create New Deal'}</h2>
                 <p className="mt-1 text-sm font-light text-gray-500">
-                  Update deal information and track progress
+                  {deal ? 'Update deal information and track progress' : 'Add a new deal to your pipeline'}
                 </p>
               </div>
               <button

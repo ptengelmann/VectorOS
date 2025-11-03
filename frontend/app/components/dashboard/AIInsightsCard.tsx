@@ -21,7 +21,7 @@ export default function AIInsightsCard() {
           <div>
             <h3 className="text-lg font-light mb-1">AI Insights Dashboard</h3>
             <p className="text-sm font-light text-white/80">
-              Get Claude AI-powered recommendations and strategic analysis
+              Get AI-powered recommendations and strategic analysis
             </p>
           </div>
         </div>

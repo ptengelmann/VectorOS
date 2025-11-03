@@ -1,6 +1,6 @@
 /**
  * VectorOS AI Insights Dashboard
- * Claude-powered business intelligence and recommendations
+ * AI-powered business intelligence and recommendations
  */
 
 'use client';
@@ -159,7 +159,7 @@ export default function InsightsPage() {
             <div>
               <h1 className="text-3xl font-light text-gray-900 mb-2">AI Insights</h1>
               <p className="text-sm font-light text-gray-600">
-                Claude-powered business intelligence and recommendations
+                AI-powered business intelligence and recommendations
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -321,7 +321,7 @@ export default function InsightsPage() {
             </div>
             <h3 className="text-xl font-light text-gray-900 mb-2">No insights yet</h3>
             <p className="text-sm font-light text-gray-600 mb-6">
-              Click "Generate New Insights" to analyze your pipeline with Claude AI
+              Click "Generate New Insights" to analyze your pipeline with our AI engine
             </p>
             <button
               onClick={generateInsights}

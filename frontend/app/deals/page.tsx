@@ -6,10 +6,11 @@
 'use client';
 
 import { useEffect, useState, Fragment } from 'react';
-import { apiClient, type Deal, type DealScore } from '@/lib/api-client';
+import { apiClient, type Deal, type DealScore, type DealAnalysis } from '@/lib/api-client';
 import DashboardHeader from '../components/dashboard/DashboardHeader';
 import HealthScoreBadge, { HealthScoreIndicator } from '../components/deals/HealthScoreBadge';
 import DealEditModal from '../components/deals/DealEditModal';
+import DealAnalysisModal from '../components/deals/DealAnalysisModal';
 
 type ViewMode = 'table' | 'grid';
 type FilterStage = 'all' | 'lead' | 'qualified' | 'proposal' | 'negotiation' | 'closed_won' | 'closed_lost';
@@ -29,6 +30,9 @@ export default function DealsPage() {
   const [scoringLoading, setScoringLoading] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [analyzingDeal, setAnalyzingDeal] = useState<Deal | null>(null);
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   useEffect(() => {
     const storedWorkspaceId = localStorage.getItem('currentWorkspaceId');
@@ -141,6 +145,39 @@ export default function DealsPage() {
     }
   };
 
+  const handleCreateDeal = async (dealId: string, dealData: Partial<Deal>) => {
+    if (!workspaceId) return;
+
+    const response = await apiClient.createDeal(workspaceId, dealData);
+
+    if (response.success && response.data) {
+      // Add new deal to the list
+      setDeals(prevDeals => [response.data!, ...prevDeals]);
+      setIsCreateModalOpen(false);
+    }
+  };
+
+  const handleAnalyzeDeal = (deal: Deal) => {
+    setAnalyzingDeal(deal);
+    setIsAnalysisModalOpen(true);
+  };
+
+  const handleRunAnalysis = async (deal: Deal): Promise<DealAnalysis | null> => {
+    try {
+      const response = await apiClient.analyzeDealWithAI(deal, deals);
+
+      if (response.success && response.data) {
+        return response.data;
+      } else {
+        console.error('Analysis failed:', response.error);
+        return null;
+      }
+    } catch (error) {
+      console.error('Analysis error:', error);
+      return null;
+    }
+  };
+
   const getFilteredDeals = () => {
     return deals
       .filter(d => filterStage === 'all' || d.stage === filterStage)
@@ -211,6 +248,7 @@ export default function DealsPage() {
                 {loading ? 'Refreshing...' : 'Refresh'}
               </button>
               <button
+                onClick={() => setIsCreateModalOpen(true)}
                 className="px-5 py-2.5 bg-peach-500 text-white text-sm font-light rounded-lg hover:bg-peach-600 transition-colors flex items-center gap-2"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -448,7 +486,7 @@ export default function DealsPage() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  // Analyze deal
+                                  handleAnalyzeDeal(deal);
                                 }}
                                 className="px-3 py-1.5 bg-peach-500 text-white text-xs font-light rounded hover:bg-peach-600 transition-colors"
                               >
@@ -564,7 +602,7 @@ export default function DealsPage() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      // Analyze deal
+                      handleAnalyzeDeal(deal);
                     }}
                     className="flex-1 px-3 py-2 bg-peach-500 text-white text-xs font-light rounded-lg hover:bg-peach-600 transition-colors"
                   >
@@ -583,6 +621,22 @@ export default function DealsPage() {
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         onSave={handleSaveDeal}
+      />
+
+      {/* Create New Deal Modal */}
+      <DealEditModal
+        deal={null}
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSave={handleCreateDeal}
+      />
+
+      {/* AI Analysis Modal */}
+      <DealAnalysisModal
+        deal={analyzingDeal}
+        isOpen={isAnalysisModalOpen}
+        onClose={() => setIsAnalysisModalOpen(false)}
+        onAnalyze={handleRunAnalysis}
       />
     </div>
   );

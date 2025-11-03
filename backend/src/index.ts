@@ -26,12 +26,14 @@ import { AppError } from './types';
 // Repositories
 import { DealRepository } from './repositories/deal.repository';
 import { WorkspaceRepository } from './repositories/workspace.repository';
+import { ActivityRepository } from './repositories/activity.repository';
 
 // Services
 import { DealService } from './services/deal.service';
 import { AIService } from './services/ai.service';
 import { InsightService } from './services/insight.service';
 import { WorkspaceService } from './services/workspace.service';
+import { ActivityService } from './services/activity.service';
 
 // Initialize Prisma
 const prisma = new PrismaClient({
@@ -104,12 +106,14 @@ if (config.enableRateLimiting) {
 // Repositories
 const dealRepository = new DealRepository(prisma);
 const workspaceRepository = new WorkspaceRepository(prisma);
+const activityRepository = new ActivityRepository(prisma);
 
 // Services
 const aiService = new AIService();
 const insightService = new InsightService(prisma, aiService);
 const workspaceService = new WorkspaceService(workspaceRepository);
 const dealService = new DealService(dealRepository, aiService, insightService);
+const activityService = new ActivityService(activityRepository);
 
 // Store in app.locals for access in routes
 app.locals.services = {
@@ -117,11 +121,13 @@ app.locals.services = {
   aiService,
   insightService,
   workspaceService,
+  activityService,
 };
 
 app.locals.repositories = {
   dealRepository,
   workspaceRepository,
+  activityRepository,
 };
 
 // ============================================================================
@@ -228,29 +234,68 @@ app.get('/api/v1/workspaces/slug/:slug', async (req: Request, res: Response) => 
 
 // Create workspace
 app.post('/api/v1/workspaces', async (req: Request, res: Response) => {
-  const { name, slug, ownerId, tier, userName } = req.body;
+  const { name, slug, ownerId, tier, userName, userEmail } = req.body;
 
-  // If ownerId looks like an email, find or create user first
+  // Always ensure user exists in database first
   let finalOwnerId = ownerId;
 
-  if (ownerId && ownerId.includes('@')) {
-    // ownerId is an email - look up or create user
+  if (ownerId) {
     try {
-      let user = await prisma.user.findUnique({
-        where: { email: ownerId },
-      });
+      // Check if this is a Clerk ID (starts with user_) or email
+      const isClerkId = ownerId.startsWith('user_');
+      const isEmail = ownerId.includes('@');
 
-      if (!user) {
-        // Create new user
-        user = await prisma.user.create({
-          data: {
-            email: ownerId,
-            name: userName || ownerId.split('@')[0],
-          },
+      let user;
+
+      if (isClerkId) {
+        // Look up by Clerk ID
+        user = await prisma.user.findUnique({
+          where: { clerkId: ownerId },
+        });
+
+        if (!user && userEmail) {
+          // Create new user with Clerk ID
+          user = await prisma.user.create({
+            data: {
+              clerkId: ownerId,
+              email: userEmail,
+              name: userName || userEmail.split('@')[0],
+            },
+          });
+        }
+      } else if (isEmail) {
+        // Look up by email
+        user = await prisma.user.findUnique({
+          where: { email: ownerId },
+        });
+
+        if (!user) {
+          // Create new user with email
+          user = await prisma.user.create({
+            data: {
+              email: ownerId,
+              name: userName || ownerId.split('@')[0],
+            },
+          });
+        }
+      } else {
+        // Try to find by ID directly
+        user = await prisma.user.findUnique({
+          where: { id: ownerId },
         });
       }
 
-      finalOwnerId = user.id;
+      if (user) {
+        finalOwnerId = user.id;
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'USER_NOT_FOUND',
+            message: 'Could not find or create user. Please provide userEmail when creating a workspace.',
+          },
+        });
+      }
     } catch (error) {
       appLogger.error('Failed to create/find user', error as Error);
       return res.status(500).json({
@@ -427,6 +472,113 @@ app.delete('/api/v1/deals/:id', async (req: Request, res: Response) => {
   }
 
   res.status(204).send();
+});
+
+// ============================================================================
+// Activity Routes
+// ============================================================================
+
+// Get activities for a deal
+app.get('/api/v1/deals/:dealId/activities', async (req: Request, res: Response) => {
+  const { dealId } = req.params;
+  const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+  const sortBy = req.query.sortBy as string | undefined;
+  const sortOrder = req.query.sortOrder as 'asc' | 'desc' | undefined;
+
+  const result = await activityService.getByDeal(dealId, {
+    page,
+    limit,
+    sortBy,
+    sortOrder,
+  });
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.json({
+    success: true,
+    data: result.data,
+  });
+});
+
+// Create activity for a deal
+app.post('/api/v1/deals/:dealId/activities', async (req: Request, res: Response) => {
+  const { dealId } = req.params;
+  const activityData = { ...req.body, dealId };
+
+  const result = await activityService.create(activityData);
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.status(201).json({
+    success: true,
+    data: result.data,
+  });
+});
+
+// Get activity by ID
+app.get('/api/v1/activities/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const result = await activityService.getById(id);
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.json({
+    success: true,
+    data: result.data,
+  });
+});
+
+// Update activity
+app.patch('/api/v1/activities/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const result = await activityService.update(id, req.body);
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.json({
+    success: true,
+    data: result.data,
+  });
+});
+
+// Delete activity
+app.delete('/api/v1/activities/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const result = await activityService.delete(id);
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.status(204).send();
+});
+
+// Mark activity as completed
+app.patch('/api/v1/activities/:id/complete', async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const result = await activityService.markCompleted(id);
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.json({
+    success: true,
+    data: result.data,
+  });
 });
 
 // Deal Analysis

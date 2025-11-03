@@ -33,39 +33,45 @@ from .models.schemas import (
     AgentResult,
     ProposalGenerationRequest,
 )
-from .agents.base_agent import AgentOrchestrator
-from .agents.strategic_analyst import StrategicAnalystAgent
-from .agents.deal_intelligence import DealIntelligenceAgent
+# Agent imports commented out - using direct services instead
+# from .agents.base_agent import AgentOrchestrator
+# from .agents.strategic_analyst import StrategicAnalystAgent
+# from .agents.deal_intelligence import DealIntelligenceAgent
+
+# Direct service imports - no langchain needed
+from .services.deal_analyzer import DealAnalyzer
+from .services.deal_scorer import DealScorer
+from .services.insights_analyzer import InsightsAnalyzer
 
 # ============================================================================
 # Metrics
 # ============================================================================
 
-# Request metrics
-REQUEST_COUNT = Counter(
-    'vectoros_requests_total',
-    'Total number of requests',
-    ['method', 'endpoint', 'status']
-)
+# Request metrics (commented out for now - simplify)
+# REQUEST_COUNT = Counter(
+#     'vectoros_requests_total',
+#     'Total number of requests',
+#     ['method', 'endpoint', 'status']
+# )
 
-REQUEST_DURATION = Histogram(
-    'vectoros_request_duration_seconds',
-    'Request duration in seconds',
-    ['method', 'endpoint']
-)
+# REQUEST_DURATION = Histogram(
+#     'vectoros_request_duration_seconds',
+#     'Request duration in seconds',
+#     ['method', 'endpoint']
+# )
 
-# AI metrics
-AI_INFERENCE_COUNT = Counter(
-    'vectoros_ai_inferences_total',
-    'Total number of AI inferences',
-    ['agent_type', 'status']
-)
+# # AI metrics
+# AI_INFERENCE_COUNT = Counter(
+#     'vectoros_ai_inferences_total',
+#     'Total number of AI inferences',
+#     ['agent_type', 'status']
+# )
 
-AI_INFERENCE_DURATION = Histogram(
-    'vectoros_ai_inference_duration_seconds',
-    'AI inference duration in seconds',
-    ['agent_type']
-)
+# AI_INFERENCE_DURATION = Histogram(
+#     'vectoros_ai_inference_duration_seconds',
+#     'AI inference duration in seconds',
+#     ['agent_type']
+# )
 
 # ============================================================================
 # Application Lifecycle
@@ -86,17 +92,12 @@ async def lifespan(app: FastAPI):
     # Initialize logging
     setup_logging()
 
-    # Initialize agent orchestrator
-    orchestrator = AgentOrchestrator()
+    # Initialize AI services directly - no complex orchestration needed
+    app.state.deal_analyzer = DealAnalyzer()
+    app.state.deal_scorer = DealScorer()
+    app.state.insights_analyzer = InsightsAnalyzer()
 
-    # Register agents
-    orchestrator.register_agent(StrategicAnalystAgent())
-    orchestrator.register_agent(DealIntelligenceAgent())
-
-    # Store in app state
-    app.state.orchestrator = orchestrator
-
-    logger.info("vectoros_ai_core_started", agents_registered=len(orchestrator.agents))
+    logger.info("vectoros_ai_core_started", services_initialized=3)
 
     yield
 
@@ -153,17 +154,17 @@ async def logging_middleware(request: Request, call_next):
         duration_ms=duration_ms,
     )
 
-    # Update metrics
-    REQUEST_COUNT.labels(
-        method=request.method,
-        endpoint=request.url.path,
-        status=response.status_code
-    ).inc()
+    # Update metrics (commented out for now)
+    # REQUEST_COUNT.labels(
+    #     method=request.method,
+    #     endpoint=request.url.path,
+    #     status=response.status_code
+    # ).inc()
 
-    REQUEST_DURATION.labels(
-        method=request.method,
-        endpoint=request.url.path
-    ).observe(duration_ms / 1000)
+    # REQUEST_DURATION.labels(
+    #     method=request.method,
+    #     endpoint=request.url.path
+    # ).observe(duration_ms / 1000)
 
     return response
 
@@ -223,12 +224,10 @@ async def readiness_check(request: Request) -> dict[str, Any]:
     """
     Readiness check - verifies all dependencies are available
     """
-    orchestrator = request.app.state.orchestrator
-
     return {
         "status": "ready",
-        "agents_registered": len(orchestrator.agents),
-        "agents": [agent.value for agent in orchestrator.agents.keys()],
+        "services_initialized": 3,
+        "services": ["deal_analyzer", "deal_scorer", "insights_analyzer"],
     }
 
 
@@ -236,8 +235,9 @@ async def readiness_check(request: Request) -> dict[str, Any]:
 # AI Core Endpoints
 # ============================================================================
 
-@app.post("/api/v1/chat", response_model=ChatResponse, tags=["AI"])
-async def chat(
+# Commented out - requires agent orchestrator which has langchain dependencies
+# @app.post("/api/v1/chat", response_model=ChatResponse, tags=["AI"])
+async def chat_disabled(
     request: Request,
     chat_request: ChatRequest
 ) -> ChatResponse:
@@ -295,8 +295,9 @@ async def chat(
         )
 
 
-@app.post("/api/v1/insights/generate", response_model=InsightResponse, tags=["AI"])
-async def generate_insights(
+# Commented out - requires agent orchestrator which has langchain dependencies
+# @app.post("/api/v1/insights/generate", response_model=InsightResponse, tags=["AI"])
+async def generate_insights_disabled(
     request: Request,
     insight_request: InsightGenerationRequest
 ) -> InsightResponse:
@@ -357,71 +358,73 @@ async def generate_insights(
         )
 
 
-@app.post("/api/v1/deals/analyze", tags=["AI"])
-async def analyze_deal(
-    request: Request,
-    analysis_request: DealAnalysisRequest
-) -> dict[str, Any]:
-    """
-    Analyze deal health and provide intelligence
+# Note: This old endpoint has been replaced by the new one below that uses DealAnalyzer
+# @app.post("/api/v1/deals/analyze", tags=["AI"])
+# async def analyze_deal_old(
+#     request: Request,
+#     analysis_request: DealAnalysisRequest
+# ) -> dict[str, Any]:
+#     """
+#     Analyze deal health and provide intelligence
+#
+#     Returns:
+#     - Deal score (0-100)
+#     - Win probability
+#     - Health status
+#     - Risk factors
+#     - Recommendations
+#     - Next best action
+#     """
+#     logger = get_logger("deal_analysis")
+#
+#     try:
+#         logger.info(
+#             "deal_analysis_request",
+#             workspace_id=analysis_request.workspace_id,
+#             deal_id=analysis_request.deal_id,
+#             depth=analysis_request.analysis_depth,
+#         )
+#
+#         orchestrator = request.app.state.orchestrator
+#         from .models.schemas import AgentType
+#
+#         # Get deal data (in real app, fetch from database)
+#         deal_data = analysis_request.deals[0] if analysis_request.deals else {}
+#
+#         result = await orchestrator.execute_task(
+#             agent_type=AgentType.DEAL_INTELLIGENCE,
+#             instruction="Analyze deal health and provide intelligence",
+#             context={
+#                 "workspace_id": analysis_request.workspace_id,
+#                 "deal_id": analysis_request.deal_id or "unknown",
+#                 "deal_data": deal_data,
+#             }
+#         )
+#
+#         if not result.success:
+#             raise HTTPException(
+#                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#                 detail=f"Deal analysis failed: {result.error}"
+#             )
+#
+#         logger.info(
+#             "deal_analysis_complete",
+#             deal_score=result.result.get("overall_score"),
+#         )
+#
+#         return result.result
+#
+#     except Exception as e:
+#         logger.error("deal_analysis_failed", error=str(e))
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=str(e)
+#         )
 
-    Returns:
-    - Deal score (0-100)
-    - Win probability
-    - Health status
-    - Risk factors
-    - Recommendations
-    - Next best action
-    """
-    logger = get_logger("deal_analysis")
 
-    try:
-        logger.info(
-            "deal_analysis_request",
-            workspace_id=analysis_request.workspace_id,
-            deal_id=analysis_request.deal_id,
-            depth=analysis_request.analysis_depth,
-        )
-
-        orchestrator = request.app.state.orchestrator
-        from .models.schemas import AgentType
-
-        # Get deal data (in real app, fetch from database)
-        deal_data = analysis_request.deals[0] if analysis_request.deals else {}
-
-        result = await orchestrator.execute_task(
-            agent_type=AgentType.DEAL_INTELLIGENCE,
-            instruction="Analyze deal health and provide intelligence",
-            context={
-                "workspace_id": analysis_request.workspace_id,
-                "deal_id": analysis_request.deal_id or "unknown",
-                "deal_data": deal_data,
-            }
-        )
-
-        if not result.success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Deal analysis failed: {result.error}"
-            )
-
-        logger.info(
-            "deal_analysis_complete",
-            deal_score=result.result.get("overall_score"),
-        )
-
-        return result.result
-
-    except Exception as e:
-        logger.error("deal_analysis_failed", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
-
-
-@app.post("/api/v1/agents/execute", response_model=AgentResult, tags=["AI"])
-async def execute_agent_task(
+# Commented out - requires agent orchestrator which has langchain dependencies
+# @app.post("/api/v1/agents/execute", response_model=AgentResult, tags=["AI"])
+async def execute_agent_task_disabled(
     request: Request,
     task: AgentTask
 ) -> AgentResult:
@@ -668,6 +671,61 @@ async def score_workspace_deals(
 
     except Exception as e:
         logger.error(f"Workspace scoring failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@app.post("/api/v1/deals/analyze", tags=["AI"])
+async def analyze_deal(
+    request: Request,
+    data: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    Perform deep AI analysis of a deal using Claude
+
+    Provides:
+    - Executive summary
+    - Win probability prediction
+    - Strengths and risks
+    - Recommended next actions
+    - Competitive insights
+    - Timing analysis
+    """
+    logger = get_logger("deal_analyzer")
+
+    try:
+        deal = data.get("deal")
+        workspace_deals = data.get("workspace_deals", [])
+
+        if not deal:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Deal data is required"
+            )
+
+        logger.info(f"Analyzing deal: {deal.get('title', 'Unknown')}")
+
+        # Use our deal analyzer service
+        from .services.deal_analyzer import DealAnalyzer
+        analyzer = DealAnalyzer()
+
+        result = analyzer.analyze_deal(deal, workspace_deals)
+
+        logger.info(
+            f"Deal analyzed: {result['deal_title']}, "
+            f"Win probability: {result['analysis'].get('win_probability', 0)}%, "
+            f"Confidence: {result['analysis'].get('confidence_level', 0)}%"
+        )
+
+        return {
+            "success": True,
+            **result
+        }
+
+    except Exception as e:
+        logger.error(f"Deal analysis failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

@@ -44,13 +44,13 @@ export default function Navigation() {
           {/* CTA Buttons */}
           <div className="flex items-center gap-4">
             <Link
-              href="/dashboard"
+              href="/sign-in"
               className="text-sm font-light text-gray-600 hover:text-gray-900 transition-colors"
             >
               Sign In
             </Link>
             <Link
-              href="/dashboard"
+              href="/sign-up"
               className="px-5 py-2 bg-peach-500 text-white text-sm font-light rounded hover:bg-peach-600 transition-colors"
             >
               Get Started

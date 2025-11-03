@@ -66,9 +66,8 @@ export class InsightService {
 
       return savedInsights;
     } catch (error) {
-      this.logger.error('Failed to generate workspace insights', {
+      this.logger.error('Failed to generate workspace insights', error as Error, {
         workspaceId,
-        error: error instanceof Error ? error.message : 'Unknown error',
       });
       throw error;
     }

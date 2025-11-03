@@ -26,7 +26,8 @@ class InsightsAnalyzer:
 
     def __init__(self):
         self.client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-        self.model = "claude-sonnet-4-5-20250929"  # Claude Sonnet 4.5 (latest)
+        # Using Claude Sonnet 4.5 - latest and best model as of 2025
+        self.model = "claude-sonnet-4-5-20250929"
 
     def analyze_workspace(self, deals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """

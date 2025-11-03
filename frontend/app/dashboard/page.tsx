@@ -6,6 +6,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
 import { apiClient, type PipelineMetrics, type Deal } from '@/lib/api-client';
 import DashboardHeader from '../components/dashboard/DashboardHeader';
 import MetricCard from '../components/dashboard/MetricCard';
@@ -14,6 +16,8 @@ import DealsList from '../components/dashboard/DealsList';
 import AIInsightsCard from '../components/dashboard/AIInsightsCard';
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const { user, isLoaded } = useUser();
   const [metrics, setMetrics] = useState<PipelineMetrics | null>(null);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,12 +27,23 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Redirect to sign-in if not authenticated
+    if (isLoaded && !user) {
+      router.push('/sign-in');
+      return;
+    }
+
     // Get workspace ID from localStorage
     const storedWorkspaceId = localStorage.getItem('currentWorkspaceId');
-    // For demo/development: Use demo workspace if no workspace is set
-    const workspaceToUse = storedWorkspaceId || '4542c01f-fa18-41fc-b232-e6d15a2ef0cd';
-    setWorkspaceId(workspaceToUse);
-  }, []);
+
+    // If no workspace, redirect to onboarding
+    if (!storedWorkspaceId && isLoaded) {
+      router.push('/onboarding');
+      return;
+    }
+
+    setWorkspaceId(storedWorkspaceId);
+  }, [isLoaded, user, router]);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -99,6 +114,18 @@ export default function DashboardPage() {
     return `${(value * 100).toFixed(1)}%`;
   };
 
+  // Show loading state while Clerk loads
+  if (!isLoaded || !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-peach-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600 font-light">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <DashboardHeader backendHealth={backendHealth} aiHealth={aiHealth} activePage="dashboard" />
@@ -127,6 +154,7 @@ export default function DashboardPage() {
             {/* Metrics Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <MetricCard
+                index={0}
                 title="Total Pipeline"
                 value={metrics ? formatCurrency(metrics.totalValue) : '$0'}
                 subtitle={`${metrics?.totalDeals || 0} deals`}
@@ -134,6 +162,7 @@ export default function DashboardPage() {
                 trendUp={true}
               />
               <MetricCard
+                index={1}
                 title="Weighted Value"
                 value={metrics ? formatCurrency(metrics.weightedValue) : '$0'}
                 subtitle="Probability adjusted"
@@ -141,6 +170,7 @@ export default function DashboardPage() {
                 trendUp={true}
               />
               <MetricCard
+                index={2}
                 title="Avg Deal Size"
                 value={metrics ? formatCurrency(metrics.averageDealSize) : '$0'}
                 subtitle="Per opportunity"
@@ -148,6 +178,7 @@ export default function DashboardPage() {
                 trendUp={false}
               />
               <MetricCard
+                index={3}
                 title="Conversion Rate"
                 value={metrics ? formatPercent(metrics.conversionRate) : '0%'}
                 subtitle="Win rate"

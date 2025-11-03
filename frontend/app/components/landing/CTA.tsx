@@ -20,16 +20,16 @@ export default function CTA() {
             </p>
             <div className="flex items-center justify-center gap-4">
               <Link
-                href="/dashboard"
+                href="/sign-up"
                 className="px-8 py-3.5 bg-white text-peach-600 text-sm font-light tracking-wide rounded hover:bg-gray-50 transition-all"
               >
                 Start Free Trial
               </Link>
               <Link
-                href="#contact"
+                href="/sign-in"
                 className="px-8 py-3.5 border border-white/30 text-white text-sm font-light tracking-wide rounded hover:bg-white/10 transition-all"
               >
-                Talk to Sales
+                Sign In
               </Link>
             </div>
             <p className="mt-6 text-xs font-light text-white/70">

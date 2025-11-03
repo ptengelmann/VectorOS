@@ -130,7 +130,7 @@ export class DealService {
 
       // If stage changed, trigger analysis
       if (data.stage && data.stage !== existing.stage) {
-        this.handleStageChange(deal, existing.stage, data.stage).catch(err => {
+        this.handleStageChange(deal, existing.stage as DealStage, data.stage as DealStage).catch(err => {
           this.logger.error('Stage change handling failed', err);
         });
       }
