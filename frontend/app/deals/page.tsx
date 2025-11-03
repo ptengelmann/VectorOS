@@ -6,11 +6,13 @@
 'use client';
 
 import { useEffect, useState, Fragment } from 'react';
-import { apiClient, type Deal, type DealScore, type DealAnalysis } from '@/lib/api-client';
+import { apiClient, type Deal, type DealScore, type DealAnalysis, type Activity, type CreateActivityData } from '@/lib/api-client';
 import DashboardHeader from '../components/dashboard/DashboardHeader';
 import HealthScoreBadge, { HealthScoreIndicator } from '../components/deals/HealthScoreBadge';
 import DealEditModal from '../components/deals/DealEditModal';
 import DealAnalysisModal from '../components/deals/DealAnalysisModal';
+import ActivityTimeline from '../components/deals/ActivityTimeline';
+import ActivityModal from '../components/deals/ActivityModal';
 
 type ViewMode = 'table' | 'grid';
 type FilterStage = 'all' | 'lead' | 'qualified' | 'proposal' | 'negotiation' | 'closed_won' | 'closed_lost';
@@ -33,6 +35,11 @@ export default function DealsPage() {
   const [analyzingDeal, setAnalyzingDeal] = useState<Deal | null>(null);
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [dealActivities, setDealActivities] = useState<Record<string, Activity[]>>({});
+  const [loadingActivities, setLoadingActivities] = useState<Record<string, boolean>>({});
+  const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [activityModalDealId, setActivityModalDealId] = useState<string | null>(null);
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
 
   useEffect(() => {
     const storedWorkspaceId = localStorage.getItem('currentWorkspaceId');
@@ -175,6 +182,126 @@ export default function DealsPage() {
     } catch (error) {
       console.error('Analysis error:', error);
       return null;
+    }
+  };
+
+  const loadActivities = async (dealId: string) => {
+    if (dealActivities[dealId]) return; // Already loaded
+
+    setLoadingActivities((prev) => ({ ...prev, [dealId]: true }));
+
+    try {
+      const response = await apiClient.getActivities(dealId);
+
+      if (response.success && response.data) {
+        const activities = response.data.items || [];
+        setDealActivities((prev) => ({ ...prev, [dealId]: activities }));
+      } else {
+        console.error('Failed to load activities:', response.error);
+      }
+    } catch (error) {
+      console.error('Error loading activities:', error);
+    } finally {
+      setLoadingActivities((prev) => ({ ...prev, [dealId]: false }));
+    }
+  };
+
+  const handleExpandDeal = (dealId: string) => {
+    const isCurrentlySelected = selectedDeal === dealId;
+    setSelectedDeal(isCurrentlySelected ? null : dealId);
+
+    // Load activities when expanding a deal
+    if (!isCurrentlySelected && !dealActivities[dealId]) {
+      loadActivities(dealId);
+    }
+  };
+
+  const handleAddActivity = (dealId: string) => {
+    setActivityModalDealId(dealId);
+    setEditingActivity(null);
+    setIsActivityModalOpen(true);
+  };
+
+  const handleEditActivity = (activity: Activity) => {
+    setActivityModalDealId(activity.dealId);
+    setEditingActivity(activity);
+    setIsActivityModalOpen(true);
+  };
+
+  const handleSaveActivity = async (activityData: CreateActivityData) => {
+    if (!activityModalDealId) return;
+
+    try {
+      if (editingActivity) {
+        // Update existing activity
+        const response = await apiClient.updateActivity(editingActivity.id, activityData);
+
+        if (response.success && response.data) {
+          // Update local state
+          setDealActivities((prev) => ({
+            ...prev,
+            [activityModalDealId]: prev[activityModalDealId].map((a) =>
+              a.id === editingActivity.id ? response.data! : a
+            ),
+          }));
+        }
+      } else {
+        // Create new activity
+        const response = await apiClient.createActivity(activityModalDealId, activityData);
+
+        if (response.success && response.data) {
+          // Add to local state
+          setDealActivities((prev) => ({
+            ...prev,
+            [activityModalDealId]: [response.data!, ...(prev[activityModalDealId] || [])],
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error saving activity:', error);
+      throw error;
+    }
+  };
+
+  const handleDeleteActivity = async (activityId: string) => {
+    if (!confirm('Are you sure you want to delete this activity?')) return;
+
+    try {
+      const response = await apiClient.deleteActivity(activityId);
+
+      if (response.success) {
+        // Remove from local state
+        setDealActivities((prev) => {
+          const newActivities = { ...prev };
+          Object.keys(newActivities).forEach((dealId) => {
+            newActivities[dealId] = newActivities[dealId].filter((a) => a.id !== activityId);
+          });
+          return newActivities;
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting activity:', error);
+    }
+  };
+
+  const handleCompleteActivity = async (activityId: string) => {
+    try {
+      const response = await apiClient.markActivityCompleted(activityId);
+
+      if (response.success && response.data) {
+        // Update local state
+        setDealActivities((prev) => {
+          const newActivities = { ...prev };
+          Object.keys(newActivities).forEach((dealId) => {
+            newActivities[dealId] = newActivities[dealId].map((a) =>
+              a.id === activityId ? response.data! : a
+            );
+          });
+          return newActivities;
+        });
+      }
+    } catch (error) {
+      console.error('Error completing activity:', error);
     }
   };
 
@@ -413,7 +540,7 @@ export default function DealsPage() {
                     return (
                       <Fragment key={deal.id}>
                         <tr
-                          onClick={() => setSelectedDeal(isSelected ? null : deal.id)}
+                          onClick={() => handleExpandDeal(deal.id)}
                           className={`border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
                             isSelected ? 'bg-gray-50' : ''
                           }`}
@@ -497,9 +624,9 @@ export default function DealsPage() {
                         </tr>
                         {isSelected && (
                           <tr key={`${deal.id}-expanded`} className="border-t border-gray-100">
-                            <td colSpan={6} className="px-0 py-0">
+                            <td colSpan={7} className="px-0 py-0">
                               <div className="bg-gray-50 px-8 py-6">
-                                <div className="grid grid-cols-2 gap-6">
+                                <div className="grid grid-cols-2 gap-6 mb-6">
                                   <div>
                                     <h4 className="text-xs font-light uppercase tracking-wide text-gray-500 mb-2">
                                       Contact Information
@@ -520,6 +647,33 @@ export default function DealsPage() {
                                       })}
                                     </p>
                                   </div>
+                                </div>
+
+                                {/* Activities Section */}
+                                <div className="border-t border-gray-200 pt-6">
+                                  <div className="flex items-center justify-between mb-4">
+                                    <h4 className="text-sm font-normal text-gray-900">Activities</h4>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAddActivity(deal.id);
+                                      }}
+                                      className="px-3 py-1.5 bg-blue-600 text-white text-xs font-light rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                      </svg>
+                                      Add Activity
+                                    </button>
+                                  </div>
+
+                                  <ActivityTimeline
+                                    activities={dealActivities[deal.id] || []}
+                                    loading={loadingActivities[deal.id]}
+                                    onEdit={handleEditActivity}
+                                    onDelete={handleDeleteActivity}
+                                    onComplete={handleCompleteActivity}
+                                  />
                                 </div>
                               </div>
                             </td>
@@ -637,6 +791,19 @@ export default function DealsPage() {
         isOpen={isAnalysisModalOpen}
         onClose={() => setIsAnalysisModalOpen(false)}
         onAnalyze={handleRunAnalysis}
+      />
+
+      {/* Activity Modal */}
+      <ActivityModal
+        isOpen={isActivityModalOpen}
+        onClose={() => {
+          setIsActivityModalOpen(false);
+          setEditingActivity(null);
+          setActivityModalDealId(null);
+        }}
+        onSave={handleSaveActivity}
+        activity={editingActivity || undefined}
+        dealId={activityModalDealId || ''}
       />
     </div>
   );
