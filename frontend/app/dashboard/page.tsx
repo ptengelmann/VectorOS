@@ -5,6 +5,9 @@
 
 'use client';
 
+// Force dynamic rendering - Clerk requires runtime environment
+export const dynamic = 'force-dynamic';
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
