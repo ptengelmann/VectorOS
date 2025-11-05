@@ -17,6 +17,8 @@ langsmith>=0.1.0
 # Vector Store & Memory
 chromadb==0.4.22
 tiktoken==0.5.2
+qdrant-client==1.7.0
+sentence-transformers==2.3.1
 
 # Database - Async Support
 psycopg2-binary==2.9.9
@@ -37,6 +39,7 @@ tenacity==8.2.3
 pyyaml==6.0.1
 python-json-logger==2.0.7
 structlog==24.1.0
+apscheduler==3.10.4
 
 # Validation & Serialization
 marshmallow==3.20.2
