@@ -258,7 +258,7 @@ export class ForecastService {
       this.logger.info('Forecast saved to database', { workspaceId, timeframe, scenario });
 
     } catch (error) {
-      this.logger.error('Error saving forecast to database', error);
+      this.logger.error('Error saving forecast to database', error instanceof Error ? error : undefined);
       // Don't throw - saving is optional, main forecast should succeed
     }
   }
