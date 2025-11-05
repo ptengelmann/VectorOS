@@ -505,21 +505,46 @@ Guidelines:
 async def main():
     """
     Main entry point for continuous monitoring worker
+
+    Runs continuously with 30-minute intervals between cycles
     """
     logger.info("🚀 VectorOS Continuous Monitoring Worker Starting...")
+    logger.info("📅 Schedule: Running every 30 minutes")
+
+    # Get backend URL from environment
+    backend_url = os.getenv("BACKEND_URL", "http://localhost:3001")
+    logger.info(f"🔗 Backend URL: {backend_url}")
 
     monitor = ContinuousMonitor()
 
-    # Run one cycle
-    results = await monitor.run_monitoring_cycle()
+    cycle_count = 0
 
-    # Exit with appropriate code
-    if results["errors"]:
-        logger.error("❌ Cycle completed with errors")
-        sys.exit(1)
-    else:
-        logger.info("✅ Cycle completed successfully")
-        sys.exit(0)
+    # Run continuously
+    while True:
+        cycle_count += 1
+        logger.info(f"\n{'='*80}")
+        logger.info(f"🔄 STARTING CYCLE #{cycle_count}")
+        logger.info(f"{'='*80}")
+
+        try:
+            # Run monitoring cycle
+            results = await monitor.run_monitoring_cycle(backend_url)
+
+            # Log results
+            if results["errors"]:
+                logger.warning(f"⚠️  Cycle #{cycle_count} completed with errors")
+            else:
+                logger.info(f"✅ Cycle #{cycle_count} completed successfully")
+
+        except Exception as e:
+            logger.error(f"❌ Fatal error in cycle #{cycle_count}: {str(e)}")
+            # Don't exit - keep running
+
+        # Wait 30 minutes before next cycle
+        logger.info(f"\n💤 Sleeping for 30 minutes until next cycle...")
+        logger.info(f"   Next cycle will start at: {(datetime.now() + timedelta(minutes=30)).strftime('%Y-%m-%d %H:%M:%S')}")
+
+        await asyncio.sleep(30 * 60)  # 30 minutes in seconds
 
 
 if __name__ == "__main__":
