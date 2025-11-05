@@ -72,7 +72,7 @@ export default function DashboardPage() {
       console.log('[Dashboard] Metrics response:', metricsResponse);
       if (metricsResponse.success && metricsResponse.data) {
         // Handle nested data structure from API wrapper
-        const metricsData = metricsResponse.data.data || metricsResponse.data;
+        const metricsData = (metricsResponse.data as any).data || metricsResponse.data;
         console.log('[Dashboard] Setting metrics:', metricsData);
         setMetrics(metricsData);
       }
