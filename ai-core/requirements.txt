@@ -35,6 +35,7 @@ statsmodels==0.14.1
 # Utilities & Tools
 python-dotenv==1.0.1
 httpx==0.27.0
+aiohttp==3.9.1
 tenacity==8.2.3
 pyyaml==6.0.1
 python-json-logger==2.0.7
