@@ -3,9 +3,10 @@ FROM python:3.13-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies including PostgreSQL dev headers
+# Install system dependencies including PostgreSQL dev headers and C++ compiler
 RUN apt-get update && apt-get install -y \
     gcc \
+    g++ \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
