@@ -278,7 +278,13 @@ export default function ActivityModal({
             <input
               type="datetime-local"
               id="scheduledAt"
-              value={formData.scheduledAt || ''}
+              value={
+                formData.scheduledAt
+                  ? typeof formData.scheduledAt === 'string'
+                    ? formData.scheduledAt
+                    : new Date(formData.scheduledAt).toISOString().slice(0, 16)
+                  : ''
+              }
               onChange={(e) =>
                 handleChange('scheduledAt', e.target.value || undefined)
               }
