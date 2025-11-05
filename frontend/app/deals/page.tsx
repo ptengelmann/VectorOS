@@ -93,7 +93,7 @@ export default function DealsPage() {
 
       if (response.success && response.data) {
         // Handle nested data structure from API wrapper
-        const items = response.data.data?.items || response.data.items || [];
+        const items = (response.data as any).data?.items || response.data.items || [];
         console.log('[Deals] Setting deals:', items.length, 'items');
         setDeals(items);
       } else {

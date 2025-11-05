@@ -137,7 +137,7 @@ export default function InsightsPage() {
         );
       })
       .forEach(insight => {
-        const dealId = insight.dealId || insight.data?.deal_id || 'unknown';
+        const dealId = (insight as any).dealId || insight.data?.deal_id || 'unknown';
         const dealTitle = insight.data?.deal_title || 'Unknown Deal';
         const dealValue = insight.data?.deal_value || 0;
         const dealStage = insight.data?.key_metrics?.stage || 'unknown';

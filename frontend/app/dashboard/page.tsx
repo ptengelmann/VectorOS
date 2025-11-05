@@ -81,7 +81,7 @@ export default function DashboardPage() {
       const dealsResponse = await apiClient.getDeals(workspaceId, 1, 10);
       if (dealsResponse.success && dealsResponse.data) {
         // Handle nested data structure from API wrapper
-        const items = dealsResponse.data.data?.items || dealsResponse.data.items || [];
+        const items = (dealsResponse.data as any).data?.items || dealsResponse.data.items || [];
         setDeals(items);
       }
     } catch (error) {
