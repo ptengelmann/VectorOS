@@ -48,6 +48,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Process IDs (for autonomous startup scripts)
+.pids/
+*.pid
+
 # Misc
 .cache/
 .temp/

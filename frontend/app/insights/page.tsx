@@ -1,18 +1,28 @@
 /**
- * VectorOS AI Insights Dashboard
- * AI-powered business intelligence and recommendations
+ * VectorOS AI Insights Dashboard - SCALABLE DESIGN
+ * Deal-first approach with insights as drill-down
  */
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { apiClient, type Insight } from '@/lib/api-client';
 import DashboardHeader from '../components/dashboard/DashboardHeader';
-import InsightCard from '../components/insights/InsightCard';
 
-type ViewMode = 'grid' | 'table';
-type FilterPriority = 'all' | 'critical' | 'high' | 'medium' | 'low';
-type FilterType = 'all' | 'priority' | 'risk' | 'opportunity' | 'prediction' | 'recommendation';
+type ViewMode = 'deals' | 'critical';
+
+interface DealWithInsights {
+  dealId: string;
+  dealTitle: string;
+  dealValue: number;
+  dealStage: string;
+  totalInsights: number;
+  criticalCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+  insights: Insight[];
+}
 
 export default function InsightsPage() {
   const [insights, setInsights] = useState<Insight[]>([]);
@@ -20,19 +30,19 @@ export default function InsightsPage() {
   const [generating, setGenerating] = useState(false);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [expandedInsight, setExpandedInsight] = useState<string | null>(null);
+  const [selectedDeal, setSelectedDeal] = useState<string | null>(null);
   const [backendHealth, setBackendHealth] = useState(false);
   const [aiHealth, setAIHealth] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('table');
-  const [filterPriority, setFilterPriority] = useState<FilterPriority>('all');
-  const [filterType, setFilterType] = useState<FilterType>('all');
+  const [viewMode, setViewMode] = useState<ViewMode>('deals');
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const storedWorkspaceId = localStorage.getItem('currentWorkspaceId');
-    // For demo/development: Use demo workspace if no workspace is set
-    const workspaceToUse = storedWorkspaceId || '4542c01f-fa18-41fc-b232-e6d15a2ef0cd';
-    setWorkspaceId(workspaceToUse);
+    if (!storedWorkspaceId) {
+      window.location.href = '/onboarding';
+      return;
+    }
+    setWorkspaceId(storedWorkspaceId);
     checkSystemHealth();
   }, []);
 
@@ -52,24 +62,21 @@ export default function InsightsPage() {
 
   const loadInsights = async () => {
     if (!workspaceId) return;
-
     setLoading(true);
     setError(null);
 
     try {
       const response = await apiClient.getInsights(workspaceId);
       if (response.success && response.data) {
-        // Ensure data is an array
-        const insightsData = Array.isArray(response.data) ? response.data : [];
-        setInsights(insightsData);
+        setInsights(Array.isArray(response.data) ? response.data : []);
       } else {
         setError(response.error?.message || 'Failed to load insights');
-        setInsights([]); // Ensure insights is always an array
+        setInsights([]);
       }
     } catch (error) {
       console.error('Failed to load insights:', error);
       setError('Failed to load insights');
-      setInsights([]); // Ensure insights is always an array
+      setInsights([]);
     } finally {
       setLoading(false);
     }
@@ -77,7 +84,6 @@ export default function InsightsPage() {
 
   const generateInsights = async () => {
     if (!workspaceId) return;
-
     setGenerating(true);
     setError(null);
 
@@ -89,7 +95,7 @@ export default function InsightsPage() {
         setError(response.error?.message || 'Failed to generate insights');
       }
     } catch (error) {
-      console.error('Failed to generate insights:', error);
+      console.error('Error generating insights:', error);
       setError('Failed to generate insights');
     } finally {
       setGenerating(false);
@@ -115,38 +121,79 @@ export default function InsightsPage() {
     }
   };
 
-  const toggleExpand = (insightId: string) => {
-    if (expandedInsight === insightId) {
-      setExpandedInsight(null);
-    } else {
-      setExpandedInsight(insightId);
-      const insight = insights.find(i => i.id === insightId);
-      if (insight?.status === 'new') {
-        handleInsightAction(insightId, 'viewed');
-      }
-    }
-  };
+  // Group insights by deal
+  const getDealsWithInsights = (): DealWithInsights[] => {
+    const dealsMap = new Map<string, DealWithInsights>();
 
-  const getFilteredInsights = () => {
-    const priorityOrder = ['critical', 'high', 'medium', 'low'];
-    return insights
+    insights
       .filter(i => i.status !== 'dismissed')
-      .filter(i => filterPriority === 'all' || i.priority === filterPriority)
-      .filter(i => filterType === 'all' || i.type === filterType)
       .filter(i => {
         if (!searchQuery) return true;
         const query = searchQuery.toLowerCase();
         return (
           i.title.toLowerCase().includes(query) ||
-          i.description.toLowerCase().includes(query)
+          i.description.toLowerCase().includes(query) ||
+          i.data?.deal_title?.toLowerCase().includes(query)
         );
       })
-      .sort((a, b) => {
-        const aPriority = priorityOrder.indexOf(a.priority);
-        const bPriority = priorityOrder.indexOf(b.priority);
-        return aPriority - bPriority;
+      .forEach(insight => {
+        const dealId = insight.dealId || insight.data?.deal_id || 'unknown';
+        const dealTitle = insight.data?.deal_title || 'Unknown Deal';
+        const dealValue = insight.data?.deal_value || 0;
+        const dealStage = insight.data?.key_metrics?.stage || 'unknown';
+
+        if (!dealsMap.has(dealId)) {
+          dealsMap.set(dealId, {
+            dealId,
+            dealTitle,
+            dealValue,
+            dealStage,
+            totalInsights: 0,
+            criticalCount: 0,
+            highCount: 0,
+            mediumCount: 0,
+            lowCount: 0,
+            insights: []
+          });
+        }
+
+        const deal = dealsMap.get(dealId)!;
+        deal.totalInsights++;
+        deal.insights.push(insight);
+
+        if (insight.priority === 'critical') deal.criticalCount++;
+        else if (insight.priority === 'high') deal.highCount++;
+        else if (insight.priority === 'medium') deal.mediumCount++;
+        else deal.lowCount++;
       });
+
+    return Array.from(dealsMap.values()).sort((a, b) => {
+      // Sort by: critical count desc, then high count desc, then total insights desc
+      if (a.criticalCount !== b.criticalCount) return b.criticalCount - a.criticalCount;
+      if (a.highCount !== b.highCount) return b.highCount - a.highCount;
+      return b.totalInsights - a.totalInsights;
+    });
   };
+
+  const getCriticalInsights = () => {
+    return insights
+      .filter(i => i.status !== 'dismissed')
+      .filter(i => i.priority === 'critical' || i.priority === 'high')
+      .sort((a, b) => {
+        if (a.priority === 'critical' && b.priority !== 'critical') return -1;
+        if (a.priority !== 'critical' && b.priority === 'critical') return 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      })
+      .slice(0, 20); // Top 20 critical/high
+  };
+
+  const deals = getDealsWithInsights();
+  const criticalInsights = getCriticalInsights();
+  const selectedDealData = deals.find(d => d.dealId === selectedDeal);
+
+  const totalInsights = insights.filter(i => i.status !== 'dismissed').length;
+  const totalCritical = insights.filter(i => i.status !== 'dismissed' && i.priority === 'critical').length;
+  const totalHigh = insights.filter(i => i.status !== 'dismissed' && i.priority === 'high').length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -159,7 +206,7 @@ export default function InsightsPage() {
             <div>
               <h1 className="text-3xl font-light text-gray-900 mb-2">AI Insights</h1>
               <p className="text-sm font-light text-gray-600">
-                AI-powered business intelligence and recommendations
+                {totalInsights} insights across {deals.length} deals ({totalCritical} critical, {totalHigh} high priority)
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -187,10 +234,10 @@ export default function InsightsPage() {
             </div>
           </div>
 
-          {/* Filters & View Controls */}
+          {/* View Mode Toggle & Search */}
           {insights.length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
-              <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-6">
+              <div className="flex items-center justify-between gap-4">
                 {/* Search */}
                 <div className="flex-1 max-w-md">
                   <div className="relative">
@@ -204,7 +251,7 @@ export default function InsightsPage() {
                     </svg>
                     <input
                       type="text"
-                      placeholder="Search insights..."
+                      placeholder="Search deals or insights..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm font-light focus:outline-none focus:ring-2 focus:ring-peach-500 focus:border-transparent"
@@ -212,79 +259,29 @@ export default function InsightsPage() {
                   </div>
                 </div>
 
-                {/* View Mode Toggle */}
+                {/* View Toggle */}
                 <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
                   <button
-                    onClick={() => setViewMode('table')}
-                    className={`px-3 py-1.5 text-xs font-light rounded transition-colors ${
-                      viewMode === 'table'
+                    onClick={() => setViewMode('deals')}
+                    className={`px-4 py-2 text-sm font-light rounded transition-colors ${
+                      viewMode === 'deals'
                         ? 'bg-white text-gray-900 shadow-sm'
                         : 'text-gray-600 hover:text-gray-900'
                     }`}
                   >
-                    Table
+                    By Deal ({deals.length})
                   </button>
                   <button
-                    onClick={() => setViewMode('grid')}
-                    className={`px-3 py-1.5 text-xs font-light rounded transition-colors ${
-                      viewMode === 'grid'
+                    onClick={() => setViewMode('critical')}
+                    className={`px-4 py-2 text-sm font-light rounded transition-colors ${
+                      viewMode === 'critical'
                         ? 'bg-white text-gray-900 shadow-sm'
                         : 'text-gray-600 hover:text-gray-900'
                     }`}
                   >
-                    Grid
+                    Critical Only ({criticalInsights.length})
                   </button>
                 </div>
-              </div>
-
-              {/* Filter Buttons */}
-              <div className="flex items-center gap-6">
-                {/* Priority Filter */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-light text-gray-500 uppercase tracking-wide">Priority:</span>
-                  <div className="flex items-center gap-1">
-                    {(['all', 'critical', 'high', 'medium', 'low'] as FilterPriority[]).map((priority) => (
-                      <button
-                        key={priority}
-                        onClick={() => setFilterPriority(priority)}
-                        className={`px-3 py-1 text-xs font-light rounded-full capitalize transition-colors ${
-                          filterPriority === priority
-                            ? 'bg-peach-500 text-white'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        {priority}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Type Filter */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-light text-gray-500 uppercase tracking-wide">Type:</span>
-                  <div className="flex items-center gap-1">
-                    {(['all', 'priority', 'risk', 'opportunity', 'prediction', 'recommendation'] as FilterType[]).map((type) => (
-                      <button
-                        key={type}
-                        onClick={() => setFilterType(type)}
-                        className={`px-3 py-1 text-xs font-light rounded-full capitalize transition-colors ${
-                          filterType === type
-                            ? 'bg-peach-500 text-white'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        {type}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Results Count */}
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <span className="text-sm font-light text-gray-600">
-                  Showing {getFilteredInsights().length} of {insights.filter(i => i.status !== 'dismissed').length} insights
-                </span>
               </div>
             </div>
           )}
@@ -331,179 +328,286 @@ export default function InsightsPage() {
               {generating ? 'Analyzing...' : 'Generate Insights'}
             </button>
           </div>
-        ) : viewMode === 'table' ? (
-          // Table View - Compact and Scalable
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-light uppercase tracking-wide text-gray-500 w-[40%]">
-                    Insight
-                  </th>
-                  <th className="px-4 py-4 text-left text-xs font-light uppercase tracking-wide text-gray-500 w-[12%]">
-                    Priority
-                  </th>
-                  <th className="px-4 py-4 text-left text-xs font-light uppercase tracking-wide text-gray-500 w-[12%]">
-                    Type
-                  </th>
-                  <th className="px-4 py-4 text-left text-xs font-light uppercase tracking-wide text-gray-500 w-[10%]">
-                    Confidence
-                  </th>
-                  <th className="px-4 py-4 text-left text-xs font-light uppercase tracking-wide text-gray-500 w-[10%]">
-                    Date
-                  </th>
-                  <th className="px-4 py-4 text-left text-xs font-light uppercase tracking-wide text-gray-500 w-[16%]">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {getFilteredInsights().map((insight) => {
-                  const priorityColors = {
-                    critical: 'bg-red-100 text-red-700',
-                    high: 'bg-orange-100 text-orange-700',
-                    medium: 'bg-yellow-100 text-yellow-700',
-                    low: 'bg-blue-100 text-blue-700',
-                  };
-                  const actions = typeof insight.actions === 'string' ? JSON.parse(insight.actions) : insight.actions;
-                  const actionsList = Array.isArray(actions) ? actions : [];
-                  const isExpanded = expandedInsight === insight.id;
+        ) : viewMode === 'deals' ? (
+          // DEALS VIEW - Scalable for 5000 deals
+          <div className="grid grid-cols-1 gap-4">
+            {deals.map((deal) => (
+              <div
+                key={deal.dealId}
+                className="bg-white border border-gray-200 rounded-xl hover:shadow-md transition-all overflow-hidden"
+              >
+                {/* Deal Header - Always Visible */}
+                <div
+                  onClick={() => setSelectedDeal(selectedDeal === deal.dealId ? null : deal.dealId)}
+                  className="flex items-center justify-between p-6 cursor-pointer hover:bg-gray-50"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-lg font-normal text-gray-900">{deal.dealTitle}</h3>
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-light rounded capitalize">
+                        {deal.dealStage}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm font-light text-gray-600">
+                        ${deal.dealValue.toLocaleString()}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {deal.criticalCount > 0 && (
+                          <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-light rounded">
+                            {deal.criticalCount} Critical
+                          </span>
+                        )}
+                        {deal.highCount > 0 && (
+                          <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-light rounded">
+                            {deal.highCount} High
+                          </span>
+                        )}
+                        {deal.mediumCount > 0 && (
+                          <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-light rounded">
+                            {deal.mediumCount} Medium
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
 
-                  return (
-                    <>
-                      <tr
-                        key={insight.id}
-                        onClick={() => toggleExpand(insight.id)}
-                        className={`border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
-                          isExpanded ? 'bg-gray-50' : ''
-                        }`}
-                      >
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <h3 className="text-sm font-normal text-gray-900 truncate">
-                                  {insight.title}
-                                </h3>
-                                {insight.status === 'new' && (
-                                  <span className="px-2 py-0.5 bg-peach-500 text-white text-xs font-light rounded-full flex-shrink-0">
-                                    New
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs font-light text-gray-500 truncate mt-1">
-                                {insight.description.substring(0, 100)}...
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-light capitalize ${
-                            priorityColors[insight.priority as keyof typeof priorityColors]
-                          }`}>
-                            {insight.priority}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className="text-sm font-light text-gray-700 capitalize">
-                            {insight.type}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className="text-sm font-light text-gray-700">
-                            {Math.round(insight.confidence * 100)}%
-                          </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className="text-sm font-light text-gray-500">
-                            {new Date(insight.createdAt).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric'
-                            })}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleInsightAction(insight.id, 'actioned');
-                              }}
-                              disabled={insight.status === 'actioned'}
-                              className="px-3 py-1.5 bg-peach-500 text-white text-xs font-light rounded hover:bg-peach-600 transition-colors disabled:opacity-50"
-                            >
-                              {insight.status === 'actioned' ? 'Done' : 'Action'}
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleInsightAction(insight.id, 'dismissed');
-                              }}
-                              className="px-3 py-1.5 text-gray-600 border border-gray-200 text-xs font-light rounded hover:bg-gray-50 transition-colors"
-                            >
-                              Dismiss
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      {isExpanded && (
-                        <tr key={`${insight.id}-expanded`} className="border-t border-gray-100">
-                          <td colSpan={6} className="px-0 py-0">
-                            <div className="bg-gray-50 px-6 py-6">
-                              {/* Full Description */}
-                              <div className="mb-6">
-                                <h4 className="text-xs font-light uppercase tracking-wide text-gray-500 mb-3">
-                                  Full Description
-                                </h4>
-                                <p className="text-sm font-light text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <div className="text-2xl font-light text-gray-900">{deal.totalInsights}</div>
+                      <div className="text-xs font-light text-gray-500">Insights</div>
+                    </div>
+                    <svg
+                      className={`w-5 h-5 text-gray-400 transition-transform ${
+                        selectedDeal === deal.dealId ? 'rotate-180' : ''
+                      }`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Expanded Insights */}
+                {selectedDeal === deal.dealId && selectedDealData && (
+                  <div className="border-t border-gray-200 bg-gray-50 p-6">
+                    <div className="space-y-4">
+                      {selectedDealData.insights.map((insight) => {
+                        const priorityColors = {
+                          critical: 'border-red-200 bg-red-50',
+                          high: 'border-orange-200 bg-orange-50',
+                          medium: 'border-yellow-200 bg-yellow-50',
+                          low: 'border-blue-200 bg-blue-50',
+                        };
+
+                        const actions = typeof insight.actions === 'string' ? JSON.parse(insight.actions) : insight.actions;
+                        const actionsList = Array.isArray(actions) ? actions : [];
+
+                        return (
+                          <div
+                            key={insight.id}
+                            className={`border-2 rounded-lg p-5 ${
+                              priorityColors[insight.priority as keyof typeof priorityColors] || 'border-gray-200 bg-white'
+                            }`}
+                          >
+                            {/* Insight Header */}
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <h4 className="text-base font-normal text-gray-900">{insight.title}</h4>
+                                  {insight.status === 'new' && (
+                                    <span className="px-2 py-0.5 bg-peach-500 text-white text-xs font-light rounded-full">
+                                      New
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-sm font-light text-gray-700 leading-relaxed">
                                   {insight.description}
                                 </p>
                               </div>
+                              <div className="flex items-center gap-2 ml-4">
+                                <span className="px-2 py-1 bg-white rounded text-xs font-light text-gray-600 capitalize">
+                                  {insight.priority}
+                                </span>
+                                <span className="px-2 py-1 bg-white rounded text-xs font-light text-gray-600">
+                                  {Math.round(insight.confidence * 100)}%
+                                </span>
+                              </div>
+                            </div>
 
-                              {/* Recommended Actions */}
-                              {actionsList.length > 0 && (
-                                <div>
-                                  <h4 className="text-xs font-light uppercase tracking-wide text-gray-500 mb-3">
-                                    Recommended Actions
-                                  </h4>
-                                  <div className="space-y-2">
-                                    {actionsList.map((action, index) => (
-                                      <div key={index} className="flex items-start gap-3">
-                                        <div className="w-6 h-6 bg-peach-500 text-white rounded flex items-center justify-center flex-shrink-0 text-xs font-normal">
+                            {/* Actions */}
+                            {actionsList.length > 0 && (
+                              <div className="mt-4 pt-4 border-t border-gray-200">
+                                <h5 className="text-xs font-light uppercase tracking-wide text-gray-500 mb-3">
+                                  Recommended Actions
+                                </h5>
+                                <div className="space-y-2">
+                                  {actionsList.map((action, index) => {
+                                    const actionText = typeof action === 'string' ? action : action.action;
+                                    const actionTimeline = typeof action === 'object' ? action.timeline : null;
+
+                                    return (
+                                      <div key={index} className="flex items-start gap-2 bg-white rounded p-3">
+                                        <div className="w-5 h-5 bg-peach-500 text-white rounded flex items-center justify-center flex-shrink-0 text-xs font-normal">
                                           {index + 1}
                                         </div>
-                                        <span className="text-sm font-light text-gray-700 leading-relaxed pt-0.5">
-                                          {action}
-                                        </span>
+                                        <div className="flex-1">
+                                          <p className="text-sm font-light text-gray-700">{actionText}</p>
+                                          {actionTimeline && (
+                                            <p className="text-xs font-light text-gray-500 mt-1">{actionTimeline}</p>
+                                          )}
+                                        </div>
                                       </div>
-                                    ))}
-                                  </div>
+                                    );
+                                  })}
                                 </div>
-                              )}
+                              </div>
+                            )}
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200">
+                              <button
+                                onClick={() => handleInsightAction(insight.id, 'actioned')}
+                                disabled={insight.status === 'actioned'}
+                                className="px-4 py-2 bg-peach-500 text-white text-xs font-light rounded hover:bg-peach-600 transition-colors disabled:opacity-50"
+                              >
+                                {insight.status === 'actioned' ? 'Actioned ✓' : 'Take Action'}
+                              </button>
+                              <button
+                                onClick={() => handleInsightAction(insight.id, 'dismissed')}
+                                className="px-4 py-2 text-gray-600 border border-gray-300 text-xs font-light rounded hover:bg-gray-50 transition-colors"
+                              >
+                                Dismiss
+                              </button>
                             </div>
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  );
-                })}
-              </tbody>
-            </table>
-            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         ) : (
-          // Grid View - Visual Cards
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {getFilteredInsights().map((insight) => (
-              <InsightCard
-                key={insight.id}
-                insight={insight}
-                expanded={expandedInsight === insight.id}
-                onToggleExpand={() => toggleExpand(insight.id)}
-                onAction={handleInsightAction}
-              />
-            ))}
+          // CRITICAL ONLY VIEW - Top 20 most important
+          <div className="space-y-4">
+            {criticalInsights.map((insight) => {
+              const priorityColors = {
+                critical: 'border-red-200 bg-red-50',
+                high: 'border-orange-200 bg-orange-50',
+              };
+
+              const actions = typeof insight.actions === 'string' ? JSON.parse(insight.actions) : insight.actions;
+              const actionsList = Array.isArray(actions) ? actions : [];
+
+              return (
+                <div
+                  key={insight.id}
+                  className={`border-2 rounded-xl p-6 ${
+                    priorityColors[insight.priority as keyof typeof priorityColors] || 'border-gray-200 bg-white'
+                  }`}
+                >
+                  {/* Deal Context */}
+                  {insight.data?.deal_title && (
+                    <div className="mb-3 pb-3 border-b border-gray-200">
+                      <a
+                        href="/deals"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-light hover:bg-blue-200 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        {insight.data.deal_title}
+                        {insight.data?.deal_value && (
+                          <span className="text-xs">
+                            (${insight.data.deal_value.toLocaleString()})
+                          </span>
+                        )}
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Insight Header */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h4 className="text-lg font-normal text-gray-900">{insight.title}</h4>
+                        {insight.status === 'new' && (
+                          <span className="px-2 py-0.5 bg-peach-500 text-white text-xs font-light rounded-full">
+                            New
+                          </span>
+                        )}
+                        <span className={`px-2 py-1 rounded text-xs font-light capitalize ${
+                          insight.priority === 'critical'
+                            ? 'bg-red-500 text-white'
+                            : 'bg-orange-500 text-white'
+                        }`}>
+                          {insight.priority}
+                        </span>
+                      </div>
+                      <p className="text-sm font-light text-gray-700 leading-relaxed">
+                        {insight.description}
+                      </p>
+                    </div>
+                    <span className="px-3 py-1 bg-white rounded text-sm font-light text-gray-600 ml-4">
+                      {Math.round(insight.confidence * 100)}% confidence
+                    </span>
+                  </div>
+
+                  {/* Actions */}
+                  {actionsList.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <h5 className="text-xs font-light uppercase tracking-wide text-gray-500 mb-3">
+                        Recommended Actions
+                      </h5>
+                      <div className="space-y-2">
+                        {actionsList.map((action, index) => {
+                          const actionText = typeof action === 'string' ? action : action.action;
+                          const actionTimeline = typeof action === 'object' ? action.timeline : null;
+
+                          return (
+                            <div key={index} className="flex items-start gap-3 bg-white rounded-lg p-3">
+                              <div className="w-6 h-6 bg-peach-500 text-white rounded flex items-center justify-center flex-shrink-0 text-xs font-normal">
+                                {index + 1}
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-light text-gray-700">{actionText}</p>
+                                {actionTimeline && (
+                                  <p className="text-xs font-light text-gray-500 mt-1">{actionTimeline}</p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-200">
+                    <button
+                      onClick={() => handleInsightAction(insight.id, 'actioned')}
+                      disabled={insight.status === 'actioned'}
+                      className="px-5 py-2.5 bg-peach-500 text-white text-sm font-light rounded-lg hover:bg-peach-600 transition-colors disabled:opacity-50"
+                    >
+                      {insight.status === 'actioned' ? 'Actioned ✓' : 'Take Action'}
+                    </button>
+                    <button
+                      onClick={() => handleInsightAction(insight.id, 'dismissed')}
+                      className="px-5 py-2.5 text-gray-600 border border-gray-300 text-sm font-light rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Dismiss
+                    </button>
+                    <span className="ml-auto text-xs font-light text-gray-400">
+                      {new Date(insight.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </main>

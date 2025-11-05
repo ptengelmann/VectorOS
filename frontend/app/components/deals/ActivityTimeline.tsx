@@ -61,18 +61,8 @@ export default function ActivityTimeline({
   };
 
   const getActivityColor = (type: string) => {
-    switch (type) {
-      case 'email':
-        return 'bg-blue-100 text-blue-600';
-      case 'call':
-        return 'bg-green-100 text-green-600';
-      case 'meeting':
-        return 'bg-purple-100 text-purple-600';
-      case 'note':
-        return 'bg-gray-100 text-gray-600';
-      default:
-        return 'bg-gray-100 text-gray-600';
-    }
+    // Use subtle peach for all activity types - minimal and professional
+    return 'bg-peach-50 text-peach-600 border border-peach-100';
   };
 
   const formatDate = (date: string) => {
@@ -159,7 +149,7 @@ export default function ActivityTimeline({
                         {activity.subject && `: ${activity.subject}`}
                       </h4>
                       {isCompleted && (
-                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-light rounded-full">
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-light rounded-full">
                           Completed
                         </span>
                       )}
@@ -176,7 +166,7 @@ export default function ActivityTimeline({
                     {!isCompleted && onComplete && (
                       <button
                         onClick={() => onComplete(activity.id)}
-                        className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                        className="p-1.5 text-gray-400 hover:text-peach-600 hover:bg-peach-50 rounded transition-colors"
                         title="Mark as completed"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -187,7 +177,7 @@ export default function ActivityTimeline({
                     {onEdit && (
                       <button
                         onClick={() => onEdit(activity)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        className="p-1.5 text-gray-400 hover:text-peach-600 hover:bg-peach-50 rounded transition-colors"
                         title="Edit"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

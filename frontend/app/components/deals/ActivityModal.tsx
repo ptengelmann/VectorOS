@@ -58,10 +58,42 @@ export default function ActivityModal({
   }, [activity, isOpen]);
 
   const activityTypes = [
-    { value: 'email', label: 'Email', icon: '✉️' },
-    { value: 'call', label: 'Phone Call', icon: '📞' },
-    { value: 'meeting', label: 'Meeting', icon: '📅' },
-    { value: 'note', label: 'Note', icon: '📝' },
+    {
+      value: 'email',
+      label: 'Email',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+      )
+    },
+    {
+      value: 'call',
+      label: 'Call',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+        </svg>
+      )
+    },
+    {
+      value: 'meeting',
+      label: 'Meeting',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      )
+    },
+    {
+      value: 'note',
+      label: 'Note',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+      )
+    },
   ];
 
   const validateForm = (): boolean => {
@@ -125,15 +157,16 @@ export default function ActivityModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <>
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black bg-opacity-50"
+        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 transition-opacity"
         onClick={onClose}
-      ></div>
+      />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 max-w-2xl w-full max-h-[90vh] overflow-y-auto pointer-events-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-normal text-gray-900">
@@ -172,14 +205,14 @@ export default function ActivityModal({
                   key={type.value}
                   type="button"
                   onClick={() => handleChange('type', type.value)}
-                  className={`p-3 rounded-lg border-2 transition-all ${
+                  className={`p-4 rounded-lg border transition-all flex flex-col items-center gap-2 ${
                     formData.type === type.value
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-peach-500 bg-peach-50 text-peach-700'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-600'
                   }`}
                 >
-                  <div className="text-2xl mb-1">{type.icon}</div>
-                  <div className="text-xs font-light text-gray-700">
+                  {type.icon}
+                  <div className="text-xs font-light">
                     {type.label}
                   </div>
                 </button>
@@ -207,8 +240,8 @@ export default function ActivityModal({
               value={formData.subject}
               onChange={(e) => handleChange('subject', e.target.value)}
               placeholder="Enter subject..."
-              className={`w-full px-4 py-2.5 border rounded-lg font-light text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
-                errors.subject ? 'border-red-500' : 'border-gray-300'
+              className={`w-full px-4 py-2.5 border rounded-lg font-light text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-peach-500 focus:border-transparent transition-all ${
+                errors.subject ? 'border-red-500' : 'border-gray-200'
               }`}
             />
             {errors.subject && (
@@ -230,7 +263,7 @@ export default function ActivityModal({
               onChange={(e) => handleChange('content', e.target.value)}
               placeholder="Add notes, details, or outcomes..."
               rows={5}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg font-light text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg font-light text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-peach-500 focus:border-transparent transition-all resize-none"
             />
           </div>
 
@@ -249,7 +282,7 @@ export default function ActivityModal({
               onChange={(e) =>
                 handleChange('scheduledAt', e.target.value || undefined)
               }
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg font-light text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg font-light text-gray-900 focus:ring-2 focus:ring-peach-500 focus:border-transparent transition-all"
             />
             <p className="mt-1 text-xs font-light text-gray-500">
               Leave empty to log as completed now
@@ -276,7 +309,7 @@ export default function ActivityModal({
             <button
               type="submit"
               disabled={saving}
-              className="px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-light hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-5 py-2.5 bg-peach-500 text-white rounded-lg text-sm font-light hover:bg-peach-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {saving ? (
                 <>
@@ -308,7 +341,8 @@ export default function ActivityModal({
             </button>
           </div>
         </form>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

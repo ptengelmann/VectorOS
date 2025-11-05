@@ -12,10 +12,20 @@ export default function OnboardingPage() {
   const [error, setError] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
 
-  // Redirect if user is not authenticated
+  // Redirect if user is not authenticated or already has a workspace
   useEffect(() => {
     if (isLoaded && !user) {
       router.push('/sign-in');
+      return;
+    }
+
+    // Check if user already has a workspace set up
+    if (isLoaded && user) {
+      const workspaceId = localStorage.getItem('currentWorkspaceId');
+      if (workspaceId) {
+        console.log('[Onboarding] User already has workspace, redirecting to dashboard');
+        router.push('/dashboard');
+      }
     }
   }, [isLoaded, user, router]);
 
@@ -38,6 +48,8 @@ export default function OnboardingPage() {
       const userName = user.fullName || user.firstName || 'User';
       const userEmail = user.primaryEmailAddress?.emailAddress || '';
 
+      console.log('[Onboarding] Creating workspace with:', { userId, userName, userEmail, workspaceName });
+
       const result = await apiClient.createWorkspace(
         userId,
         { name: workspaceName },
@@ -45,21 +57,37 @@ export default function OnboardingPage() {
         userEmail
       );
 
+      console.log('[Onboarding] Workspace creation result:', result);
+
       if (result.success && result.data) {
+        const workspaceId = result.data.id;
+
+        console.log('[Onboarding] Workspace created:', result.data);
+        console.log('[Onboarding] Storing workspace ID:', workspaceId);
+
+        if (!workspaceId) {
+          console.error('[Onboarding] No workspace ID in response!', result);
+          setError('Failed to create workspace: No ID returned');
+          return;
+        }
+
         // Store workspace ID and user info in localStorage
-        localStorage.setItem('currentWorkspaceId', result.data.id);
+        localStorage.setItem('currentWorkspaceId', workspaceId);
         localStorage.setItem('currentUserId', userId);
         localStorage.setItem('currentUserEmail', userEmail);
         localStorage.setItem('currentUserName', userName);
 
+        console.log('[Onboarding] localStorage set, redirecting to dashboard');
+
         // Redirect to dashboard
         router.push('/dashboard');
       } else {
+        console.error('[Onboarding] Workspace creation failed:', result);
         setError(result.error?.message || 'Failed to create workspace');
       }
     } catch (err) {
+      console.error('[Onboarding] Workspace creation error:', err);
       setError('An unexpected error occurred');
-      console.error('Workspace creation error:', err);
     } finally {
       setLoading(false);
     }

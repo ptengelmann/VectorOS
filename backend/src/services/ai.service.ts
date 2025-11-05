@@ -290,23 +290,31 @@ export class AIService {
 
   /**
    * Analyze workspace deals and generate insights
+   * Calls the autonomous insights generator in AI Core
    */
-  async analyzeWorkspace(deals: any[]): Promise<any[]> {
-    this.logger.info('Analyzing workspace deals', { dealCount: deals.length });
+  async analyzeWorkspace(workspaceId: string, deals: any[]): Promise<any[]> {
+    this.logger.info('Generating autonomous insights for workspace', {
+      workspaceId,
+      dealCount: deals.length
+    });
 
     try {
       const response = await this.client.post(
-        '/api/v1/insights/analyze-workspace',
-        { deals }
+        '/api/v1/insights/generate',
+        {
+          workspace_id: workspaceId,
+          user_id: null,  // Optional
+          deals: deals    // Pass real deals from database
+        }
       );
 
       if (response.data.success) {
-        return response.data.insights;
+        return response.data.insights || [];
       } else {
         throw new Error('AI Core returned unsuccessful response');
       }
     } catch (error) {
-      this.logger.error('Workspace analysis failed', error as Error);
+      this.logger.error('Autonomous insights generation failed', error as Error);
       throw error;
     }
   }

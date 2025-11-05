@@ -674,7 +674,7 @@ export default function DealsPage() {
                                         e.stopPropagation();
                                         handleAddActivity(deal.id);
                                       }}
-                                      className="px-3 py-1.5 bg-blue-600 text-white text-xs font-light rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                      className="px-3 py-1.5 bg-peach-500 text-white text-xs font-light rounded-lg hover:bg-peach-600 transition-colors flex items-center gap-1"
                                     >
                                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

@@ -4,7 +4,7 @@ import { UserButton } from '@clerk/nextjs';
 interface DashboardHeaderProps {
   backendHealth: boolean;
   aiHealth: boolean;
-  activePage?: 'dashboard' | 'insights' | 'deals';
+  activePage?: 'dashboard' | 'insights' | 'deals' | 'forecast';
 }
 
 export default function DashboardHeader({ backendHealth, aiHealth, activePage = 'dashboard' }: DashboardHeaderProps) {
@@ -29,6 +29,16 @@ export default function DashboardHeader({ backendHealth, aiHealth, activePage = 
                 }`}
               >
                 Dashboard
+              </Link>
+              <Link
+                href="/forecast"
+                className={`text-sm font-light transition-colors pb-1 ${
+                  activePage === 'forecast'
+                    ? 'text-peach-600 border-b-2 border-peach-500'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Forecast
               </Link>
               <Link
                 href="/insights"

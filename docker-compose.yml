@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - AI_CORE_URL=http://ai-core:8000
+    depends_on:
+      - ai-core
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # AI Core API
+  ai-core:
+    build:
+      context: ./ai-core
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Autonomous Monitoring Worker (runs every 30 minutes)
+  worker:
+    build:
+      context: ./ai-core
+      dockerfile: Dockerfile.worker
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      - backend
+      - ai-core
+    restart: unless-stopped
+    # Override command to run in loop mode
+    command: >
+      sh -c "
+        while true; do
+          echo '[$(date)] Running monitoring cycle...';
+          python -m src.workers.continuous_monitor;
+          echo '[$(date)] Cycle complete. Next run in 30 minutes...';
+          sleep 1800;
+        done
+      "
+
+  # Frontend (optional - can be deployed separately to Vercel)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:3001
+      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+      - NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+      - NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+      - NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/onboarding
+      - NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/onboarding
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  logs:
+    driver: local

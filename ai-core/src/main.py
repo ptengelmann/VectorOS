@@ -10,7 +10,9 @@ Production-ready AI microservice with:
 - Rate limiting
 - CORS security
 """
+import json
 import time
+import os
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -20,9 +22,20 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from fastapi.responses import Response
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
 
 from .config import settings
 from .utils.logger import setup_logging, get_logger, request_logger
+
+# Initialize Sentry for error tracking
+if os.getenv("SENTRY_DSN"):
+    sentry_sdk.init(
+        dsn=os.getenv("SENTRY_DSN"),
+        integrations=[FastApiIntegration()],
+        traces_sample_rate=0.1,  # 10% of transactions for performance monitoring
+        environment=os.getenv("NODE_ENV", "development"),
+    )
 from .models.schemas import (
     ChatRequest,
     ChatResponse,
@@ -42,6 +55,10 @@ from .models.schemas import (
 from .services.deal_analyzer import DealAnalyzer
 from .services.deal_scorer import DealScorer
 from .services.insights_analyzer import InsightsAnalyzer
+from .services.revenue_forecaster import get_revenue_forecaster
+from .services.insights_generator import InsightsGenerator
+from .services.intelligent_insights_generator import IntelligentInsightsGenerator
+from .services.memory_service import get_memory_service
 
 # ============================================================================
 # Metrics
@@ -97,7 +114,19 @@ async def lifespan(app: FastAPI):
     app.state.deal_scorer = DealScorer()
     app.state.insights_analyzer = InsightsAnalyzer()
 
-    logger.info("vectoros_ai_core_started", services_initialized=3)
+    # Initialize vector memory service
+    app.state.memory_service = get_memory_service()
+
+    # Initialize INTELLIGENT insights generator (RAG-based with Claude)
+    app.state.intelligent_insights_generator = IntelligentInsightsGenerator(
+        memory_service=app.state.memory_service,
+        deal_analyzer=app.state.deal_analyzer
+    )
+
+    # Keep old generator for backwards compatibility (will deprecate)
+    app.state.insights_generator = InsightsGenerator()
+
+    logger.info("vectoros_ai_core_started", services_initialized=6)
 
     yield
 
@@ -730,6 +759,289 @@ async def analyze_deal(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+
+@app.post("/api/v1/forecast/generate", tags=["Revenue Intelligence"])
+async def generate_forecast(
+    request: Request,
+    data: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    Generate revenue forecast for workspace
+
+    This is THE killer feature that makes VectorOS a Revenue Intelligence Platform.
+
+    Uses:
+    - Vector memory to find similar historical deals
+    - Outcome tracker to measure accuracy
+    - Historical win rates to adjust probabilities
+    - Statistical analysis for confidence intervals
+
+    Request body:
+    {
+        "workspace_id": str,          # Required
+        "timeframe": "30d" | "60d" | "90d",  # Optional, default: "30d"
+        "scenario": "best" | "likely" | "worst"  # Optional, default: "likely"
+    }
+
+    Returns:
+    {
+        "success": true,
+        "forecast": {
+            "workspace_id": str,
+            "timeframe": str,
+            "scenario": str,
+            "predicted_revenue": float,
+            "confidence": float,
+            "best_case": float,
+            "likely_case": float,
+            "worst_case": float,
+            "pipeline_coverage": float,
+            "revenue_goal": float,
+            "required_pipeline": float,
+            "deals_analyzed": int,
+            "breakdown_by_stage": [...],
+            "forecasted_deals": [...],
+            "historical_accuracy": [...]
+        }
+    }
+    """
+    logger = get_logger("revenue_forecast")
+
+    try:
+        workspace_id = data.get("workspace_id")
+        timeframe = data.get("timeframe", "30d")
+        scenario = data.get("scenario", "likely")
+
+        if not workspace_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="workspace_id is required"
+            )
+
+        # Validate timeframe
+        if timeframe not in ["30d", "60d", "90d"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="timeframe must be one of: 30d, 60d, 90d"
+            )
+
+        # Validate scenario
+        if scenario not in ["best", "likely", "worst"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="scenario must be one of: best, likely, worst"
+            )
+
+        logger.info(
+            f"Generating {timeframe} {scenario} forecast for workspace {workspace_id}"
+        )
+
+        # Get revenue forecaster (will be initialized with memory + outcome tracker later)
+        # For now it works without them (graceful degradation)
+        forecaster = get_revenue_forecaster()
+
+        if not forecaster:
+            # Initialize basic forecaster without memory/tracker for now
+            from .services.revenue_forecaster import RevenueForecaster
+            forecaster = RevenueForecaster(
+                db_client=None,  # Will connect to backend API instead
+                memory_service=None,  # Graceful degradation
+                outcome_tracker=None  # Graceful degradation
+            )
+
+        # Generate forecast
+        forecast_result = await forecaster.forecast_revenue(
+            workspace_id=workspace_id,
+            timeframe=timeframe,
+            scenario=scenario
+        )
+
+        logger.info(
+            f"Forecast generated: ${forecast_result['predicted_revenue']:,.0f} "
+            f"with {forecast_result['confidence']:.1%} confidence"
+        )
+
+        return {
+            "success": True,
+            "forecast": forecast_result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Forecast generation failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@app.post("/api/v1/insights/generate", tags=["Autonomous Intelligence"])
+async def generate_autonomous_insights(
+    request: Request,
+    data: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    Generate autonomous insights for workspace - THE DIFFERENTIATOR
+
+    This is what makes VectorOS autonomous:
+    - AI monitors deals 24/7
+    - Detects stale deals, at-risk opportunities, upsell chances
+    - Generates actionable insights with confidence scores
+    - Tells users EXACTLY what to do
+
+    Request body:
+    {
+        "workspace_id": str,  # Required
+        "user_id": str        # Optional
+    }
+
+    Returns:
+    {
+        "success": true,
+        "insights_generated": 5,
+        "insights": [
+            {
+                "type": "warning",  # warning, risk, opportunity, prediction
+                "title": "Deal going cold",
+                "description": "...",
+                "priority": "critical",  # critical, high, medium, low
+                "confidence": 0.87,
+                "data": {...},
+                "actions": [...]
+            }
+        ]
+    }
+    """
+    logger = get_logger("autonomous_insights")
+
+    try:
+        workspace_id = data.get("workspace_id")
+        user_id = data.get("user_id")
+        deals = data.get("deals")  # Optional: real deals from backend
+
+        if not workspace_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="workspace_id is required"
+            )
+
+        logger.info(f"Generating autonomous insights for workspace: {workspace_id}")
+        if deals:
+            logger.info(f"Received {len(deals)} real deals from backend")
+            logger.info(f"Deal details: {json.dumps(deals, default=str, indent=2)}")
+
+        # Get INTELLIGENT insights generator (RAG-based with Claude)
+        generator = request.app.state.intelligent_insights_generator
+
+        # Generate all insights for workspace
+        result = await generator.generate_workspace_insights(
+            workspace_id=workspace_id,
+            user_id=user_id,
+            deals=deals  # Pass real deals if provided
+        )
+
+        logger.info(
+            f"Generated {result.get('insights_generated', 0)} insights "
+            f"for workspace {workspace_id}"
+        )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Insight generation failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@app.post("/api/v1/insights/debug", tags=["Debug"])
+async def debug_insights(
+    request: Request,
+    data: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    🔍 DEBUG ENDPOINT - Shows raw Claude prompt and response
+
+    This helps us understand why insights aren't being generated.
+
+    Request body:
+    {
+        "deals": [...]  # Array of deals to analyze
+    }
+
+    Returns:
+    {
+        "system_prompt": "...",
+        "user_prompt": "...",
+        "claude_response": "...",
+        "parsed_insights": [...]
+    }
+    """
+    logger = get_logger("debug_insights")
+
+    try:
+        deals = data.get("deals", [])
+
+        if not deals or len(deals) == 0:
+            return {
+                "error": "No deals provided",
+                "hint": "Pass 'deals' array in request body"
+            }
+
+        # Get first deal for testing
+        deal = deals[0]
+        logger.info(f"[DEBUG] Analyzing deal: {deal.get('title')}")
+
+        # Get generator
+        generator = request.app.state.intelligent_insights_generator
+
+        # Build the prompt that would be sent to Claude
+        similar_deals = []  # Skip RAG for debug
+        user_prompt = generator._build_rag_prompt(deal, similar_deals)
+        system_prompt = generator.system_prompt
+
+        # Call Claude
+        logger.info(f"[DEBUG] Calling Claude API...")
+        response = generator.anthropic.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4000,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}]
+        )
+
+        response_text = response.content[0].text
+        logger.info(f"[DEBUG] Claude responded with {len(response_text)} chars")
+
+        # Try to parse
+        parsed_insights = generator._parse_claude_response(response_text, deal)
+        logger.info(f"[DEBUG] Parsed {len(parsed_insights)} insights")
+
+        return {
+            "deal_analyzed": {
+                "id": deal.get("id"),
+                "title": deal.get("title"),
+                "stage": deal.get("stage"),
+                "value": deal.get("value")
+            },
+            "system_prompt_length": len(system_prompt),
+            "user_prompt": user_prompt,
+            "claude_response": response_text,
+            "parsed_insights_count": len(parsed_insights),
+            "parsed_insights": parsed_insights,
+            "success": True
+        }
+
+    except Exception as e:
+        logger.error(f"[DEBUG] Error: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 
 # ============================================================================

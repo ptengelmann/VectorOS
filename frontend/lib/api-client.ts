@@ -97,6 +97,48 @@ export interface WorkspaceScoreMetrics {
   };
 }
 
+export interface RevenueForecast {
+  workspace_id: string;
+  timeframe: string;
+  scenario: string;
+  predicted_revenue: number;
+  confidence: number;
+  best_case: number;
+  likely_case: number;
+  worst_case: number;
+  pipeline_coverage: number;
+  revenue_goal?: number;
+  required_pipeline?: number;
+  deals_analyzed: number;
+  breakdown_by_stage: Array<{
+    stage: string;
+    deals: number;
+    total_value: number;
+    weighted_value: number;
+    avg_probability: number;
+  }>;
+  forecasted_deals: Array<{
+    deal_id: string;
+    title: string;
+    company: string;
+    value: number;
+    stage: string;
+    original_probability: number;
+    adjusted_probability: number;
+    weighted_value: number;
+    similar_deals_analyzed: number;
+    confidence: number;
+    close_date?: string;
+  }>;
+  historical_accuracy: Array<{
+    month: string;
+    predicted: number;
+    actual: number;
+    error_percentage: number;
+  }>;
+  generated_at: string;
+}
+
 export interface Workspace {
   id: string;
   name: string;
@@ -174,7 +216,13 @@ class APIClient {
         };
       }
 
-      // Handle AI service responses that already include success field
+      // Handle responses that already include success field
+      // If the response has both success and data fields, it's already in the correct format
+      if (data.success !== undefined && data.data !== undefined) {
+        return data;
+      }
+
+      // If the response only has success but no data field, wrap it
       if (data.success !== undefined) {
         return {
           success: data.success,
@@ -402,6 +450,46 @@ class APIClient {
   async markActivityCompleted(activityId: string): Promise<ApiResponse<Activity>> {
     return this.request<Activity>(`${API_BASE_URL}/api/v1/activities/${activityId}/complete`, {
       method: 'PATCH',
+    });
+  }
+
+  // ========================================================================
+  // Revenue Forecasting (THE KILLER FEATURE)
+  // ========================================================================
+
+  async generateForecast(
+    workspaceId: string,
+    timeframe: '30d' | '60d' | '90d' = '30d',
+    scenario: 'best' | 'likely' | 'worst' = 'likely'
+  ): Promise<ApiResponse<RevenueForecast>> {
+    return this.request<RevenueForecast>(`${API_BASE_URL}/api/v1/forecast/generate`, {
+      method: 'POST',
+      body: JSON.stringify({
+        workspaceId,
+        timeframe,
+        scenario,
+      }),
+    });
+  }
+
+  async getForecastHistory(
+    workspaceId: string,
+    limit: number = 10
+  ): Promise<ApiResponse<any[]>> {
+    return this.request<any[]>(`${API_BASE_URL}/api/v1/workspaces/${workspaceId}/forecasts?limit=${limit}`);
+  }
+
+  async getForecastById(forecastId: string): Promise<ApiResponse<any>> {
+    return this.request<any>(`${API_BASE_URL}/api/v1/forecasts/${forecastId}`);
+  }
+
+  async updateForecastOutcome(
+    forecastId: string,
+    actualRevenue: number
+  ): Promise<ApiResponse<any>> {
+    return this.request<any>(`${API_BASE_URL}/api/v1/forecasts/${forecastId}/outcome`, {
+      method: 'PATCH',
+      body: JSON.stringify({ actualRevenue }),
     });
   }
 

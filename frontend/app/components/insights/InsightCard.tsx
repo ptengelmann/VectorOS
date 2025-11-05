@@ -72,7 +72,7 @@ export default function InsightCard({ insight, expanded, onToggleExpand, onActio
           {/* Center: Main Content */}
           <div className="flex-1 min-w-0">
             {/* Title Row */}
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-3 mb-2">
               <h3 className="text-lg font-normal text-gray-900">{insight.title}</h3>
               {insight.status === 'new' && (
                 <span className="px-2.5 py-1 bg-peach-500 text-white text-xs font-light rounded-full flex-shrink-0">
@@ -80,6 +80,27 @@ export default function InsightCard({ insight, expanded, onToggleExpand, onActio
                 </span>
               )}
             </div>
+
+            {/* Deal Context */}
+            {insight.data?.deal_title && (
+              <div className="flex items-center gap-2 mb-3">
+                <a
+                  href="/deals"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-light hover:bg-blue-100 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  {insight.data.deal_title}
+                </a>
+                {insight.data?.deal_value && (
+                  <span className="text-xs font-light text-gray-500">
+                    ${insight.data.deal_value.toLocaleString()}
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Metadata Badges */}
             <div className="flex items-center gap-2 mb-4">
@@ -140,16 +161,52 @@ export default function InsightCard({ insight, expanded, onToggleExpand, onActio
                 Recommended Actions
               </h4>
               <div className="space-y-3">
-                {actionsList.map((action, index) => (
-                  <div key={index} className="flex items-start gap-4">
-                    <div className="w-7 h-7 mt-0.5 bg-peach-500 text-white rounded-lg flex items-center justify-center flex-shrink-0 font-normal text-sm">
-                      {index + 1}
+                {actionsList.map((action, index) => {
+                  const actionText = typeof action === 'string' ? action : action.action;
+                  const actionPriority = typeof action === 'object' ? action.priority : null;
+                  const actionTimeline = typeof action === 'object' ? action.timeline : null;
+                  const actionImpact = typeof action === 'object' ? action.expected_impact : null;
+
+                  return (
+                    <div key={index} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                      <div className="flex items-start gap-4">
+                        <div className="w-7 h-7 mt-0.5 bg-peach-500 text-white rounded-lg flex items-center justify-center flex-shrink-0 font-normal text-sm">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-normal text-gray-900 leading-relaxed">
+                            {actionText}
+                          </p>
+                          {(actionPriority || actionTimeline) && (
+                            <div className="flex flex-wrap items-center gap-3 mt-2">
+                              {actionPriority && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-white rounded text-xs font-light text-gray-600">
+                                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14a6 6 0 110-12 6 6 0 010 12z"/>
+                                  </svg>
+                                  <span className="capitalize">{actionPriority}</span>
+                                </span>
+                              )}
+                              {actionTimeline && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-white rounded text-xs font-light text-gray-600">
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  {actionTimeline}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {actionImpact && (
+                            <p className="text-xs font-light text-gray-500 mt-2">
+                              <span className="font-normal">Impact:</span> {actionImpact}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <span className="text-sm font-light text-gray-700 leading-relaxed pt-0.5">
-                      {action}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

@@ -26,26 +26,55 @@ export class InsightService {
     this.logger.info('Generating workspace insights', { workspaceId });
 
     try {
-      // Get all deals for the workspace
+      // Get all active deals for the workspace
       const deals = await this.prisma.deal.findMany({
-        where: { workspaceId },
+        where: {
+          workspaceId,
+          stage: {
+            notIn: ['won', 'lost']
+          }
+        },
         orderBy: { updatedAt: 'desc' },
       });
 
+      this.logger.info('Found deals for workspace', { workspaceId, dealCount: deals.length });
+
       if (deals.length === 0) {
-        this.logger.info('No deals found for workspace', { workspaceId });
+        this.logger.info('No active deals found for workspace', { workspaceId });
         return [];
       }
 
-      // Call AI Core to analyze deals
-      const aiInsights = await this.aiService.analyzeWorkspace(deals);
+      // Format deals for AI Core
+      const formattedDeals = deals.map(deal => ({
+        id: deal.id,
+        title: deal.title,
+        value: deal.value,
+        stage: deal.stage,
+        probability: deal.probability,
+        contactName: deal.contactName,
+        contactEmail: deal.contactEmail,
+        company: deal.company,
+        closeDate: deal.closeDate,
+        createdAt: deal.createdAt.toISOString(),
+        updatedAt: deal.updatedAt.toISOString(),
+      }));
 
-      // Save insights to database
+      // Call AI Core autonomous insights generator with REAL deals
+      const aiInsights = await this.aiService.analyzeWorkspace(workspaceId, formattedDeals);
+
+      this.logger.info('AI Core returned insights', {
+        workspaceId,
+        insightCount: aiInsights.length
+      });
+
+      // Save insights to database with dealId extracted from data
       const savedInsights = await Promise.all(
         aiInsights.map((insight: any) =>
           this.prisma.insight.create({
             data: {
               workspaceId,
+              dealId: insight.data?.deal_id || null, // Extract dealId from data
+              // userId can be added when we have user context in the request
               type: insight.type || 'recommendation',
               title: insight.title,
               description: insight.description,
@@ -59,7 +88,7 @@ export class InsightService {
         )
       );
 
-      this.logger.info('Workspace insights generated', {
+      this.logger.info('Workspace insights saved to database', {
         workspaceId,
         count: savedInsights.length,
       });

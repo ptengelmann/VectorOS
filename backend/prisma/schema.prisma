@@ -21,6 +21,7 @@ model User {
 
   workspaces    Workspace[]
   deals         Deal[]
+  insights      Insight[]
 
   @@map("users")
 }
@@ -89,6 +90,7 @@ model Deal {
   updatedAt     DateTime @updatedAt
 
   activities    Activity[]
+  insights      Insight[]
 
   @@map("deals")
 }
@@ -123,13 +125,341 @@ model Insight {
   data          Json?    // supporting data
   actions       Json?    // suggested actions
 
+  // Multi-tenant associations
   workspaceId   String
   workspace     Workspace @relation(fields: [workspaceId], references: [id])
+
+  // Deal association (optional - some insights are workspace-level)
+  dealId        String?
+  deal          Deal? @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  // User who generated/received the insight (optional)
+  userId        String?
+  user          User? @relation(fields: [userId], references: [id])
 
   status        String   @default("new") // new, viewed, actioned, dismissed
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  @@index([workspaceId])
+  @@index([dealId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
   @@map("insights")
+}
+
+// AI Prediction model (for tracking and learning)
+model AIPrediction {
+  id                    String   @id @default(uuid())
+  dealId                String
+
+  // Prediction data
+  predictionType        String   // win_probability, close_date, value, churn_risk
+  predictedValue        Float?   // numeric predictions
+  predictedCategory     String?  // categorical predictions
+  confidence            Float    // 0.0-1.0
+
+  // Factors and reasoning
+  factorsAnalyzed       Json     // what the AI considered
+  reasoning             String?  // why this prediction
+
+  // Outcome tracking
+  actualOutcome         String?  // actual result
+  actualValue           Float?   // actual numeric value
+  predictionError       Float?   // calculated error
+  wasCorrect            Boolean? // if applicable
+
+  // Metadata
+  modelVersion          String?  // which model made this prediction
+  workspaceId           String
+
+  createdAt             DateTime @default(now())
+  resolvedAt            DateTime? // when outcome was determined
+
+  @@index([dealId])
+  @@index([workspaceId])
+  @@index([predictionType])
+  @@map("ai_predictions")
+}
+
+// Recommendation Feedback model (for learning from user actions)
+model RecommendationFeedback {
+  id                    String   @id @default(uuid())
+  recommendationId      String   // insight or prediction ID
+
+  // User feedback
+  userAction            String   // accepted, rejected, modified, dismissed
+  wasHelpful            Boolean?
+  userComment           String?
+
+  // Outcome
+  actualResult          String?  // what happened after
+  resultValue           Float?
+
+  // Metadata
+  workspaceId           String
+  userId                String?
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([recommendationId])
+  @@index([workspaceId])
+  @@map("recommendation_feedback")
+}
+
+// Deal Embedding model (for vector search tracking)
+model DealEmbedding {
+  id                    String   @id @default(uuid())
+  dealId                String   @unique
+
+  // Embedding metadata
+  embeddingVersion      String   // model version used
+  embeddingDimensions   Int      // vector size
+
+  // Context when embedded
+  dealSnapshot          Json     // deal data at embedding time
+
+  // Similarity tracking
+  similarDealsFound     Int      @default(0)
+  lastSimilaritySearch  DateTime?
+
+  workspaceId           String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([dealId])
+  @@index([workspaceId])
+  @@map("deal_embeddings")
+}
+
+// Revenue Forecast model (THE killer feature for Revenue Intelligence)
+model RevenueForecast {
+  id                    String   @id @default(uuid())
+
+  workspaceId           String
+
+  // Forecast parameters
+  timeframe             String   // "30d", "60d", "90d"
+  scenario              String   // "best", "likely", "worst"
+
+  // Forecast results
+  predictedRevenue      Float
+  confidence            Float    // 0.0-1.0
+
+  // Scenario breakdown
+  bestCase              Float
+  likelyCase            Float
+  worstCase             Float
+
+  // Pipeline metrics
+  pipelineCoverage      Float    // total_pipeline / goal
+  revenueGoal           Float?   // if set
+  requiredPipeline      Float?   // goal * 2.5 (industry standard)
+
+  // Analysis details
+  dealsAnalyzed         Int
+  breakdown             Json     // stage breakdown, rep breakdown, etc.
+  factors               Json?    // what influenced the forecast
+
+  // Outcome tracking (for learning)
+  createdAt             DateTime @default(now())
+  resolvedAt            DateTime? // when timeframe ends
+  actualRevenue         Float?    // actual closed revenue
+  accuracyScore         Float?    // prediction accuracy (0-100)
+
+  @@index([workspaceId])
+  @@index([timeframe])
+  @@index([createdAt])
+  @@map("revenue_forecasts")
+}
+
+// Revenue Goal model
+model RevenueGoal {
+  id                    String   @id @default(uuid())
+
+  workspaceId           String
+
+  // Goal details
+  period                String   // "monthly", "quarterly", "yearly"
+  targetRevenue         Float
+  startDate             DateTime
+  endDate               DateTime
+
+  // Tracking
+  currentProgress       Float?   // optional: track actual progress
+  lastCalculatedAt      DateTime?
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([period])
+  @@index([startDate])
+  @@map("revenue_goals")
+}
+
+// ============================================================================
+// AUTONOMOUS DATA CAPTURE - Email/Calendar/CRM Auto-Ingestion
+// ============================================================================
+
+// Captured Email model (emails that mention deals/opportunities)
+model CapturedEmail {
+  id                    String   @id @default(uuid())
+
+  workspaceId           String
+
+  // Email metadata
+  messageId             String   @unique // from email provider
+  threadId              String?  // conversation thread
+  subject               String
+  from                  String
+  to                    String[]
+  cc                    String[]
+  body                  String   @db.Text
+  receivedAt            DateTime
+
+  // AI extraction
+  aiProcessed           Boolean  @default(false)
+  extractedData         Json?    // AI-extracted deal info
+
+  // Deal linkage
+  dealId                String?  // linked to existing deal
+  createdDealId         String?  // if AI auto-created a deal
+
+  // Confidence
+  isDealRelated         Boolean  @default(false)
+  confidence            Float?   // AI confidence (0.0-1.0)
+
+  // Processing status
+  status                String   @default("pending") // pending, processed, ignored, error
+  processingError       String?
+
+  createdAt             DateTime @default(now())
+  processedAt           DateTime?
+
+  @@index([workspaceId])
+  @@index([messageId])
+  @@index([receivedAt])
+  @@index([aiProcessed])
+  @@index([isDealRelated])
+  @@map("captured_emails")
+}
+
+// Captured Calendar Event model (meetings that might be deal-related)
+model CapturedCalendarEvent {
+  id                    String   @id @default(uuid())
+
+  workspaceId           String
+
+  // Calendar event metadata
+  eventId               String   @unique // from calendar provider
+  title                 String
+  description           String?  @db.Text
+  startTime             DateTime
+  endTime               DateTime
+  attendees             String[] // email addresses
+  location              String?
+  meetingLink           String?
+
+  // AI extraction
+  aiProcessed           Boolean  @default(false)
+  extractedData         Json?    // AI-extracted deal info
+
+  // Deal linkage
+  dealId                String?  // linked to existing deal
+  createdDealId         String?  // if AI auto-created a deal
+
+  // Confidence
+  isDealRelated         Boolean  @default(false)
+  confidence            Float?   // AI confidence (0.0-1.0)
+
+  // Processing status
+  status                String   @default("pending") // pending, processed, ignored, error
+  processingError       String?
+
+  createdAt             DateTime @default(now())
+  processedAt           DateTime?
+
+  @@index([workspaceId])
+  @@index([eventId])
+  @@index([startTime])
+  @@index([aiProcessed])
+  @@index([isDealRelated])
+  @@map("captured_calendar_events")
+}
+
+// Sync Log model (track integration sync operations)
+model SyncLog {
+  id                    String   @id @default(uuid())
+
+  integrationId         String
+  workspaceId           String
+
+  // Sync details
+  syncType              String   // full, incremental, manual
+  status                String   // started, completed, failed
+
+  // Metrics
+  itemsProcessed        Int      @default(0)
+  itemsCreated          Int      @default(0)
+  itemsUpdated          Int      @default(0)
+  itemsFailed           Int      @default(0)
+
+  // Timing
+  startedAt             DateTime @default(now())
+  completedAt           DateTime?
+  durationMs            Int?
+
+  // Errors
+  errorMessage          String?
+  errorDetails          Json?
+
+  // Metadata
+  metadata              Json?    // sync-specific data
+
+  @@index([integrationId])
+  @@index([workspaceId])
+  @@index([startedAt])
+  @@index([status])
+  @@map("sync_logs")
+}
+
+// AI Processing Queue model (for async AI analysis)
+model AIProcessingQueue {
+  id                    String   @id @default(uuid())
+
+  workspaceId           String
+
+  // Task details
+  taskType              String   // email_analysis, calendar_analysis, deal_scoring, insight_generation
+  priority              Int      @default(5) // 1-10, 10 = highest
+
+  // Payload
+  entityType            String   // email, calendar_event, deal
+  entityId              String
+  payload               Json?    // task-specific data
+
+  // Processing
+  status                String   @default("pending") // pending, processing, completed, failed, retrying
+  attempts              Int      @default(0)
+  maxAttempts           Int      @default(3)
+
+  // Results
+  result                Json?
+  error                 String?
+
+  // Timing
+  createdAt             DateTime @default(now())
+  scheduledFor          DateTime @default(now())
+  processedAt           DateTime?
+
+  @@index([workspaceId])
+  @@index([status])
+  @@index([priority])
+  @@index([scheduledFor])
+  @@index([taskType])
+  @@map("ai_processing_queue")
 }

@@ -12,6 +12,8 @@
  */
 
 import 'express-async-errors';
+import * as Sentry from '@sentry/node';
+import { ProfilingIntegration } from '@sentry/profiling-node';
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -22,6 +24,19 @@ import { PrismaClient } from '@prisma/client';
 import { config } from './utils/config';
 import { appLogger, createLogger } from './utils/logger';
 import { AppError } from './types';
+
+// Initialize Sentry for error tracking
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    integrations: [
+      new ProfilingIntegration(),
+    ],
+    tracesSampleRate: 0.1,
+    profilesSampleRate: 0.1,
+    environment: process.env.NODE_ENV || 'development',
+  });
+}
 
 // Repositories
 import { DealRepository } from './repositories/deal.repository';
@@ -34,6 +49,7 @@ import { AIService } from './services/ai.service';
 import { InsightService } from './services/insight.service';
 import { WorkspaceService } from './services/workspace.service';
 import { ActivityService } from './services/activity.service';
+import { ForecastService } from './services/forecast.service';
 
 // Initialize Prisma
 const prisma = new PrismaClient({
@@ -46,6 +62,12 @@ const app: Express = express();
 // ============================================================================
 // Middleware
 // ============================================================================
+
+// Sentry request handler (must be first)
+if (process.env.SENTRY_DSN) {
+  app.use(Sentry.Handlers.requestHandler());
+  app.use(Sentry.Handlers.tracingHandler());
+}
 
 // Security
 app.use(helmet({
@@ -114,6 +136,7 @@ const insightService = new InsightService(prisma, aiService);
 const workspaceService = new WorkspaceService(workspaceRepository);
 const dealService = new DealService(dealRepository, aiService, insightService);
 const activityService = new ActivityService(activityRepository);
+const forecastService = new ForecastService(prisma);
 
 // Store in app.locals for access in routes
 app.locals.services = {
@@ -122,6 +145,7 @@ app.locals.services = {
   insightService,
   workspaceService,
   activityService,
+  forecastService,
 };
 
 app.locals.repositories = {
@@ -581,6 +605,101 @@ app.patch('/api/v1/activities/:id/complete', async (req: Request, res: Response)
   });
 });
 
+// ============================================================================
+// Revenue Forecast Routes (THE KILLER FEATURE)
+// ============================================================================
+
+// Generate revenue forecast
+app.post('/api/v1/forecast/generate', async (req: Request, res: Response) => {
+  const { workspaceId, timeframe, scenario } = req.body;
+
+  if (!workspaceId) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: 'workspaceId is required',
+        statusCode: 400,
+      },
+    });
+  }
+
+  const result = await forecastService.generateForecast({
+    workspaceId,
+    timeframe: timeframe || '30d',
+    scenario: scenario || 'likely',
+  });
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.json({
+    success: true,
+    data: result.data,
+  });
+});
+
+// Get forecast history for workspace
+app.get('/api/v1/workspaces/:workspaceId/forecasts', async (req: Request, res: Response) => {
+  const { workspaceId } = req.params;
+  const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10;
+
+  const result = await forecastService.getForecastHistory(workspaceId, limit);
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.json({
+    success: true,
+    data: result.data,
+  });
+});
+
+// Get single forecast by ID
+app.get('/api/v1/forecasts/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const result = await forecastService.getForecastById(id);
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.json({
+    success: true,
+    data: result.data,
+  });
+});
+
+// Update forecast with actual outcome (for learning)
+app.patch('/api/v1/forecasts/:id/outcome', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { actualRevenue } = req.body;
+
+  if (actualRevenue === undefined || actualRevenue === null) {
+    return res.status(400).json({
+      success: false,
+      error: {
+        message: 'actualRevenue is required',
+        statusCode: 400,
+      },
+    });
+  }
+
+  const result = await forecastService.updateForecastOutcome(id, actualRevenue);
+
+  if (!result.success) {
+    return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  res.json({
+    success: true,
+    data: result.data,
+  });
+});
+
+// ============================================================================
 // Deal Analysis
 app.post('/api/v1/deals/:id/analyze', async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -654,6 +773,52 @@ app.get('/api/v1/workspaces/:workspaceId/insights', async (req: Request, res: Re
   });
 });
 
+// Batch create insights (for autonomous monitoring worker)
+app.post('/api/v1/workspaces/:workspaceId/insights/batch', async (req: Request, res: Response) => {
+  const { workspaceId } = req.params;
+  const { insights } = req.body;
+
+  if (!Array.isArray(insights) || insights.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: { message: 'insights array is required and must not be empty' }
+    });
+  }
+
+  try {
+    const savedInsights = await Promise.all(
+      insights.map((insight: any) =>
+        prisma.insight.create({
+          data: {
+            workspaceId,
+            dealId: insight.data?.deal_id || null,
+            type: insight.type || 'recommendation',
+            title: insight.title,
+            description: insight.description,
+            priority: insight.priority || 'medium',
+            confidence: insight.confidence || 0.8,
+            data: insight.data || {},
+            actions: insight.actions || {},
+            status: 'new',
+          },
+        })
+      )
+    );
+
+    res.status(201).json({
+      success: true,
+      data: savedInsights,
+      count: savedInsights.length
+    });
+  } catch (error) {
+    console.error('Error saving batch insights:', error);
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to save insights' }
+    });
+  }
+});
+
 // Mark insight as viewed
 app.patch('/api/v1/insights/:insightId/viewed', async (req: Request, res: Response) => {
   const { insightId } = req.params;
@@ -704,6 +869,11 @@ app.use((_req: Request, res: Response) => {
     },
   });
 });
+
+// Sentry error handler (must be before other error handlers)
+if (process.env.SENTRY_DSN) {
+  app.use(Sentry.Handlers.errorHandler());
+}
 
 // Global Error Handler
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
