@@ -1,11 +1,2 @@
-[phases.setup]
-nixPkgs = ["nodejs", "npm"]
-
-[phases.install]
-cmds = ["npm ci"]
-
-[phases.build]
-cmds = ["npx prisma generate", "npm run build"]
-
 [start]
-cmd = "npm start"
+cmd = "node dist/index.js"
