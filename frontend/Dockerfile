@@ -40,8 +40,8 @@ RUN echo "Building with NEXT_PUBLIC_API_URL: $NEXT_PUBLIC_API_URL" && \
       exit 1; \
     fi
 
-# Build Next.js
-RUN npm run build
+# Build Next.js (use npx to run next directly)
+RUN npx next build
 
 # Production image, copy all the files and run next
 FROM base AS runner
