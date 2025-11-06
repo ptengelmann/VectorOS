@@ -59,6 +59,11 @@ const prisma = new PrismaClient({
 // Initialize Express
 const app: Express = express();
 
+// Trust proxy for Railway/production deployment
+if (config.nodeEnv === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // ============================================================================
 // Middleware
 // ============================================================================
