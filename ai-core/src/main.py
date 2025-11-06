@@ -837,18 +837,9 @@ async def generate_forecast(
             f"Generating {timeframe} {scenario} forecast for workspace {workspace_id}"
         )
 
-        # Get revenue forecaster (will be initialized with memory + outcome tracker later)
-        # For now it works without them (graceful degradation)
-        forecaster = get_revenue_forecaster()
-
-        if not forecaster:
-            # Initialize basic forecaster without memory/tracker for now
-            from .services.revenue_forecaster import RevenueForecaster
-            forecaster = RevenueForecaster(
-                db_client=None,  # Will connect to backend API instead
-                memory_service=None,  # Graceful degradation
-                outcome_tracker=None  # Graceful degradation
-            )
+        # Get revenue forecaster with backend URL
+        backend_url = os.getenv('BACKEND_URL', 'http://localhost:3001')
+        forecaster = get_revenue_forecaster(backend_url=backend_url)
 
         # Generate forecast
         forecast_result = await forecaster.forecast_revenue(

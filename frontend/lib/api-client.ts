@@ -119,9 +119,12 @@ export interface RevenueForecast {
   best_case: number;
   likely_case: number;
   worst_case: number;
+  mean_forecast?: number;
+  standard_deviation?: number;
   pipeline_coverage: number;
   revenue_goal?: number;
   required_pipeline?: number;
+  total_pipeline_value?: number;
   deals_analyzed: number;
   breakdown_by_stage: Array<{
     stage: string;
@@ -139,11 +142,20 @@ export interface RevenueForecast {
     original_probability: number;
     adjusted_probability: number;
     weighted_value: number;
-    similar_deals_analyzed: number;
+    similar_deals_analyzed?: number;
     confidence: number;
     close_date?: string;
   }>;
-  historical_accuracy: Array<{
+  simulation_stats?: {
+    num_simulations: number;
+    min: number;
+    max: number;
+    p10: number;
+    p25: number;
+    p75: number;
+    p90: number;
+  };
+  historical_accuracy?: Array<{
     month: string;
     predicted: number;
     actual: number;
