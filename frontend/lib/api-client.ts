@@ -14,7 +14,10 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ||
     ? (() => { throw new Error('NEXT_PUBLIC_API_URL must be set in production'); })()
     : 'http://localhost:3001');
 
-const AI_BASE_URL = process.env.NEXT_PUBLIC_AI_URL || 'http://localhost:8000';
+const AI_BASE_URL = process.env.NEXT_PUBLIC_AI_URL ||
+  (process.env.NODE_ENV === 'production'
+    ? (() => { throw new Error('NEXT_PUBLIC_AI_URL must be set in production'); })()
+    : 'http://localhost:8000');
 
 export interface ApiResponse<T = any> {
   success: boolean;
