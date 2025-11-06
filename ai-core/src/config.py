@@ -63,6 +63,14 @@ class Settings(BaseSettings):
         default=["http://localhost:3000", "http://localhost:3001"]
     )
 
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """Parse CORS_ORIGINS from comma-separated string or list"""
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",")]
+        return v
+
     # Monitoring
     enable_metrics: bool = True
     enable_tracing: bool = True
