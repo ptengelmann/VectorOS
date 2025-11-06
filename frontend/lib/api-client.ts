@@ -3,7 +3,17 @@
  * Type-safe API client for VectorOS Backend
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// Log environment for debugging
+if (typeof window !== 'undefined') {
+  console.log('[API Client] NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
+}
+
+// Use environment variable or throw error in production
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === 'production'
+    ? (() => { throw new Error('NEXT_PUBLIC_API_URL must be set in production'); })()
+    : 'http://localhost:3001');
+
 const AI_BASE_URL = process.env.NEXT_PUBLIC_AI_URL || 'http://localhost:8000';
 
 export interface ApiResponse<T = any> {
