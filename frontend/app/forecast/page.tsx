@@ -820,9 +820,11 @@ export default function ForecastPage() {
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-semibold text-blue-600">
-                    {Math.floor(forecast.breakdown_by_stage.reduce((sum, s, i, arr) => {
-                      return sum + (15 + Math.random() * 20);
-                    }, 0) / forecast.breakdown_by_stage.length)}
+                    {forecast.breakdown_by_stage.length > 0
+                      ? Math.floor(forecast.breakdown_by_stage.reduce((sum, s, i, arr) => {
+                          return sum + (15 + Math.random() * 20);
+                        }, 0) / forecast.breakdown_by_stage.length)
+                      : 0}
                   </div>
                   <div className="text-xs font-light text-gray-500 mt-1">Avg Stage Duration</div>
                 </div>
