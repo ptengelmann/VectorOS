@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "VectorOS AI Core",
   "scripts": {
-    "dev": "python src/main.py",
+    "dev": "python3 src/main.py",
     "start": "uvicorn src.main:app --host 0.0.0.0 --port 8000"
   }
 }

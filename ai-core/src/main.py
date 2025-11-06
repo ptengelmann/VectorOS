@@ -22,14 +22,20 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from fastapi.responses import Response
-import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+# Optional Sentry integration
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    SENTRY_AVAILABLE = True
+except ImportError:
+    SENTRY_AVAILABLE = False
 
 from .config import settings
 from .utils.logger import setup_logging, get_logger, request_logger
 
 # Initialize Sentry for error tracking
-if os.getenv("SENTRY_DSN"):
+if SENTRY_AVAILABLE and os.getenv("SENTRY_DSN"):
     sentry_sdk.init(
         dsn=os.getenv("SENTRY_DSN"),
         integrations=[FastApiIntegration()],
