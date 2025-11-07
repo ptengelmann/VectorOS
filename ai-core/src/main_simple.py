@@ -11,6 +11,8 @@ from pydantic import BaseModel
 from .services.revenue_forecaster import get_revenue_forecaster
 # Embeddings service
 from .services.embeddings_service import get_embeddings_service
+# ML Deal Scorer
+from .services.ml_deal_scorer import get_ml_deal_scorer
 
 # Create FastAPI app
 app = FastAPI(
@@ -183,6 +185,90 @@ async def get_embeddings_stats():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+
+# ML Deal Scoring Endpoints
+
+class ScoreDealRequest(BaseModel):
+    deal: dict
+    similar_deals: Optional[List[dict]] = None
+
+class ScoreMultipleDealsRequest(BaseModel):
+    deals: List[dict]
+    similar_deals_map: Optional[dict] = None
+
+@app.post("/api/v1/ml/score-deal")
+async def ml_score_deal(request: ScoreDealRequest):
+    """
+    Score a single deal using ML model
+
+    Example:
+    {
+        "deal": {
+            "id": "deal-uuid",
+            "title": "Enterprise Deal - Acme Corp",
+            "value": 100000,
+            "stage": "proposal",
+            "probability": 65,
+            "closeDate": "2025-12-31",
+            "createdAt": "2025-01-01",
+            "updatedAt": "2025-11-07",
+            "activities": []
+        },
+        "similar_deals": []  // Optional
+    }
+    """
+    try:
+        ml_scorer = get_ml_deal_scorer()
+        score = ml_scorer.score_deal(request.deal, request.similar_deals)
+        return {
+            "success": True,
+            "score": score
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to score deal: {str(e)}")
+
+@app.post("/api/v1/ml/score-multiple")
+async def ml_score_multiple_deals(request: ScoreMultipleDealsRequest):
+    """
+    Score multiple deals in batch using ML model
+
+    Example:
+    {
+        "deals": [
+            {"id": "1", "title": "Deal 1", ...},
+            {"id": "2", "title": "Deal 2", ...}
+        ],
+        "similar_deals_map": {  // Optional
+            "1": [...],
+            "2": [...]
+        }
+    }
+    """
+    try:
+        ml_scorer = get_ml_deal_scorer()
+        scores = ml_scorer.score_multiple_deals(request.deals, request.similar_deals_map)
+        return {
+            "success": True,
+            "scores": scores,
+            "count": len(scores)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to score deals: {str(e)}")
+
+@app.get("/api/v1/ml/model-info")
+async def get_ml_model_info():
+    """Get ML model metadata and feature importance"""
+    try:
+        ml_scorer = get_ml_deal_scorer()
+        model_info = ml_scorer.get_model_info()
+        feature_importance = ml_scorer.get_feature_importance()
+        return {
+            "success": True,
+            "model_info": model_info,
+            "feature_importance": feature_importance[:15]  # Top 15 features
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get model info: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

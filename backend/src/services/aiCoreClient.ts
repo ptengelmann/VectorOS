@@ -108,6 +108,51 @@ class AICoreClient {
       return false;
     }
   }
+
+  /**
+   * Score a single deal using ML model
+   */
+  async scoreDeal(deal: any): Promise<any> {
+    try {
+      const response = await this.client.post('/api/v1/ml/score-deal', {
+        deal,
+        similar_deals: null, // Can be enhanced later with vector search
+      });
+      return response.data.score;
+    } catch (error) {
+      logger.error('Failed to score deal:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Score multiple deals in batch
+   */
+  async scoreMultipleDeals(deals: any[]): Promise<any[]> {
+    try {
+      const response = await this.client.post('/api/v1/ml/score-multiple', {
+        deals,
+        similar_deals_map: null,
+      });
+      return response.data.scores;
+    } catch (error) {
+      logger.error('Failed to score multiple deals:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get ML model information and feature importance
+   */
+  async getModelInfo(): Promise<any> {
+    try {
+      const response = await this.client.get('/api/v1/ml/model-info');
+      return response.data;
+    } catch (error) {
+      logger.error('Failed to get model info:', error);
+      throw error;
+    }
+  }
 }
 
 // Singleton instance

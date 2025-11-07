@@ -4,7 +4,7 @@ Extracts ML features from deals for training and prediction
 """
 
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,6 +14,13 @@ class FeatureEngineer:
     def __init__(self):
         """Initialize feature engineering service"""
         logger.info("Feature Engineering service initialized")
+
+    def _parse_timestamp(self, timestamp_str: str) -> datetime:
+        """Parse ISO format timestamp string to datetime with timezone"""
+        # Handle both 'Z' suffix and already converted '+00:00' format
+        if timestamp_str.endswith('Z'):
+            timestamp_str = timestamp_str.replace('Z', '+00:00')
+        return datetime.fromisoformat(timestamp_str)
 
     def extract_features(self, deal: Dict, similar_deals: Optional[List[Dict]] = None) -> Dict:
         """
@@ -53,13 +60,13 @@ class FeatureEngineer:
     def _extract_temporal_features(self, deal: Dict) -> Dict:
         """Extract time-based features"""
         features = {}
-        now = datetime.utcnow()
+        now = datetime.utcnow().replace(tzinfo=timezone.utc)
 
         # Deal age (days since creation)
         created_at = deal.get('createdAt')
         if created_at:
             if isinstance(created_at, str):
-                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                created_at = self._parse_timestamp(created_at)
             deal_age_days = (now - created_at).days
             features['deal_age_days'] = deal_age_days
             features['deal_age_weeks'] = deal_age_days / 7
@@ -71,7 +78,7 @@ class FeatureEngineer:
         close_date = deal.get('closeDate')
         if close_date:
             if isinstance(close_date, str):
-                close_date = datetime.fromisoformat(close_date.replace('Z', '+00:00'))
+                close_date = self._parse_timestamp(close_date)
             days_until_close = (close_date - now).days
             features['days_until_close'] = days_until_close
             features['is_overdue'] = 1 if days_until_close < 0 else 0
@@ -185,13 +192,13 @@ class FeatureEngineer:
             features['activities_per_day'] = 0
 
         # Recent activity (last 7 days)
-        now = datetime.utcnow()
+        now = datetime.utcnow().replace(tzinfo=timezone.utc)
         recent_activities = 0
         for activity in activities:
             created_at = activity.get('createdAt')
             if created_at:
                 if isinstance(created_at, str):
-                    created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    created_at = self._parse_timestamp(created_at)
                 if (now - created_at).days <= 7:
                     recent_activities += 1
 
@@ -213,7 +220,7 @@ class FeatureEngineer:
             if latest_activity:
                 created_at = latest_activity.get('createdAt')
                 if isinstance(created_at, str):
-                    created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    created_at = self._parse_timestamp(created_at)
                 features['days_since_last_activity'] = (now - created_at).days
             else:
                 features['days_since_last_activity'] = 999
