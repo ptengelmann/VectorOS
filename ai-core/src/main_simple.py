@@ -270,6 +270,72 @@ async def get_ml_model_info():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get model info: {str(e)}")
 
+# Autonomous Monitoring Endpoints
+
+class AnalyzeDealsRequest(BaseModel):
+    deals: List[dict]
+    ml_scores: Optional[dict] = None
+
+class MonitorWorkspaceRequest(BaseModel):
+    workspace_id: str
+
+@app.post("/api/v1/monitoring/analyze-deals")
+async def analyze_deals(request: AnalyzeDealsRequest):
+    """
+    Analyze deals for anomalies and health issues
+
+    Example:
+    {
+        "deals": [
+            {"id": "1", "title": "Deal 1", "activities": [...], ...},
+            {"id": "2", "title": "Deal 2", "activities": [...], ...}
+        ],
+        "ml_scores": {  // Optional
+            "1": {"win_probability": 0.75, "risk_level": "low"},
+            "2": {"win_probability": 0.25, "risk_level": "critical"}
+        }
+    }
+    """
+    try:
+        from .services.anomaly_detector import get_anomaly_detector
+
+        anomaly_detector = get_anomaly_detector()
+        anomalies = anomaly_detector.analyze_workspace_deals(
+            request.deals,
+            request.ml_scores
+        )
+
+        return {
+            "success": True,
+            "anomalies_detected": len(anomalies),
+            "anomalies": anomalies
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to analyze deals: {str(e)}")
+
+@app.post("/api/v1/monitoring/run-once")
+async def run_monitoring_once(request: MonitorWorkspaceRequest):
+    """
+    Run monitoring cycle once for a workspace
+
+    Example:
+    {
+        "workspace_id": "workspace-uuid"
+    }
+    """
+    try:
+        from .workers.deal_monitor import DealMonitor
+
+        monitor = DealMonitor()
+        result = await monitor.run_once(workspace_id=request.workspace_id)
+
+        return {
+            "success": True,
+            "result": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to run monitoring: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
