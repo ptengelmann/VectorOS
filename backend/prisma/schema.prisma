@@ -80,6 +80,11 @@ model Deal {
   source        String?  // hubspot, manual, etc.
   externalId    String?  // ID from source system
 
+  // ML Training: Deal outcome tracking
+  outcome       String?  // null (active), "won", "lost"
+  lostReason    String?  // why deal was lost (for learning)
+  closedAt      DateTime? // when outcome was determined
+
   workspaceId   String
   workspace     Workspace @relation(fields: [workspaceId], references: [id])
 
@@ -92,6 +97,8 @@ model Deal {
   activities    Activity[]
   insights      Insight[]
 
+  @@index([outcome])
+  @@index([closedAt])
   @@map("deals")
 }
 

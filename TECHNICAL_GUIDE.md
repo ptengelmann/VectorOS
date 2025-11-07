@@ -39,8 +39,9 @@ Last Updated: November 6, 2025
 │      Port 8000 (Development)         │
 │  - Monte Carlo Simulations           │
 │  - Deal Scoring Engine               │
+│  - Vector Embeddings (Qdrant)        │
+│  - Semantic Search (384-dim vectors) │
 │  - ML Model Inference (Future)       │
-│  - Vector Embeddings (Qdrant Ready)  │
 └──────────────────────────────────────┘
 ```
 
@@ -91,6 +92,9 @@ probability     INTEGER (0-100)
 contactName     VARCHAR
 contactEmail    VARCHAR
 closeDate       DATE
+outcome         VARCHAR (null=active, 'won', 'lost') -- ML training
+lostReason      VARCHAR -- why deal was lost
+closedAt        TIMESTAMP -- when outcome determined
 createdAt       TIMESTAMP
 updatedAt       TIMESTAMP
 ```
@@ -388,6 +392,106 @@ Response: 200
 }
 ```
 
+#### **Vector Embeddings & Semantic Search**
+
+```
+POST /api/v1/embeddings/embed-deal
+Embed a single deal in vector database
+
+Request:
+{
+  "deal": {
+    "id": "deal-uuid",
+    "title": "Enterprise Deal - Acme Corp",
+    "company": "Acme Corp",
+    "value": 100000,
+    "stage": "proposal",
+    "probability": 98
+  }
+}
+
+Response: 200
+{
+  "success": true,
+  "point_id": "deal-uuid",
+  "message": "Deal 'Enterprise Deal - Acme Corp' embedded successfully"
+}
+```
+
+```
+POST /api/v1/embeddings/embed-multiple
+Batch embed multiple deals
+
+Request:
+{
+  "deals": [
+    {"id": "1", "title": "Deal 1", ...},
+    {"id": "2", "title": "Deal 2", ...}
+  ]
+}
+
+Response: 200
+{
+  "success": true,
+  "embedded_count": 2,
+  "point_ids": ["uuid1", "uuid2"],
+  "message": "Successfully embedded 2/2 deals"
+}
+```
+
+```
+POST /api/v1/embeddings/find-similar
+Find similar deals using vector search
+
+Request (by deal ID):
+{
+  "deal_id": "deal-uuid",
+  "limit": 10,
+  "score_threshold": 0.7
+}
+
+OR Request (by text):
+{
+  "deal_text": "Enterprise software deal for financial services",
+  "limit": 5,
+  "score_threshold": 0.8
+}
+
+Response: 200
+{
+  "success": true,
+  "count": 3,
+  "similar_deals": [
+    {
+      "deal_id": "similar-uuid",
+      "title": "Similar Deal",
+      "company": "Similar Co",
+      "value": 90000,
+      "stage": "proposal",
+      "probability": 95,
+      "outcome": "won",
+      "similarity_score": 0.87,
+      "close_date": "2025-10-15"
+    }
+  ]
+}
+```
+
+```
+GET /api/v1/embeddings/stats
+Get vector database statistics
+
+Response: 200
+{
+  "success": true,
+  "stats": {
+    "total_deals": 2,
+    "vector_size": 384,
+    "distance_metric": "COSINE"
+  }
+}
+```
+
 #### **Health Check**
 
 ```
@@ -401,6 +505,27 @@ Response: 200
   "version": "0.1.0"
 }
 ```
+
+---
+
+### **Backend API - Auto-Embedding**
+
+#### **Batch Embed Workspace Deals**
+
+```
+POST /api/v1/workspaces/:workspaceId/deals/embed-all
+Batch embed all deals in a workspace
+
+Response: 200
+{
+  "success": true,
+  "message": "Successfully embedded 15/15 deals",
+  "embedded_count": 15,
+  "total_deals": 15
+}
+```
+
+**Note**: Deal creation and updates automatically trigger embedding in the background (non-blocking).
 
 ---
 

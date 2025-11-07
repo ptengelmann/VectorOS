@@ -29,7 +29,9 @@ VectorOS is an enterprise-grade revenue intelligence platform that uses advanced
 
 ### **AI Core Services** ai-core/src/main_simple.py:1
 - Revenue forecasting API (FastAPI)
-- Deal scoring endpoints
+- Vector embeddings & semantic search (Qdrant)
+- Deal similarity matching (384-dim vectors)
+- Auto-embedding pipeline for all deals
 - CORS-enabled, auto-reload development
 
 ---
@@ -47,7 +49,7 @@ VectorOS/
 **Tech Stack:**
 - **Frontend**: Next.js 15, TypeScript, Tailwind, Recharts, Clerk Auth
 - **Backend**: Node.js, Express, PostgreSQL, Prisma ORM
-- **AI Core**: Python 3.11+, FastAPI, NumPy, Sentence Transformers
+- **AI Core**: Python 3.11+, FastAPI, NumPy, Sentence Transformers, Qdrant
 
 ---
 
@@ -98,12 +100,15 @@ The system correctly models binary outcomes across 10,000 simulations using Beta
 
 ## 🎯 What's Next
 
-See **`VISION_AND_ROADMAP.md`** for:
-- Advanced ML model training timeline
-- Vector search integration
-- Autonomous monitoring system
-- Deal scoring with embeddings
-- Revenue optimization engine
+**Phase 2.1: Vector Search - COMPLETE ✅**
+- ✅ Qdrant integration with auto-embedding
+- ✅ Semantic search for similar deals
+- ✅ 384-dimensional vector embeddings
+
+**Phase 2.2-2.4: See `VISION_AND_ROADMAP.md`**
+- Advanced ML deal scoring model
+- Autonomous monitoring & alerts
+- Continuous learning system
 
 ---
 
@@ -111,4 +116,4 @@ See **`VISION_AND_ROADMAP.md`** for:
 
 Proprietary - All Rights Reserved
 
-**Built by the VectorOS Team** | Last Updated: Nov 6, 2025
+**Built by the VectorOS Team** | Last Updated: Nov 7, 2025

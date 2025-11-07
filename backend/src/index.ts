@@ -50,6 +50,7 @@ import { InsightService } from './services/insight.service';
 import { WorkspaceService } from './services/workspace.service';
 import { ActivityService } from './services/activity.service';
 import { ForecastService } from './services/forecast.service';
+import { aiCoreClient } from './services/aiCoreClient';
 
 // Initialize Prisma
 const prisma = new PrismaClient({
@@ -471,6 +472,13 @@ app.post('/api/v1/workspaces/:workspaceId/deals', async (req: Request, res: Resp
     return res.status(result.error?.statusCode || 500).json(result);
   }
 
+  // Auto-embed the deal in vector database (non-blocking)
+  if (result.data) {
+    aiCoreClient.embedDeal(result.data).catch((err) => {
+      appLogger.error(`Failed to embed deal ${result.data?.id}:`, err);
+    });
+  }
+
   res.status(201).json({
     success: true,
     data: result.data,
@@ -484,6 +492,13 @@ app.patch('/api/v1/deals/:id', async (req: Request, res: Response) => {
 
   if (!result.success) {
     return res.status(result.error?.statusCode || 500).json(result);
+  }
+
+  // Re-embed the updated deal in vector database (non-blocking)
+  if (result.data) {
+    aiCoreClient.embedDeal(result.data).catch((err) => {
+      appLogger.error(`Failed to re-embed deal ${result.data?.id}:`, err);
+    });
   }
 
   res.json({
@@ -502,6 +517,45 @@ app.delete('/api/v1/deals/:id', async (req: Request, res: Response) => {
   }
 
   res.status(204).send();
+});
+
+// Batch embed all deals in a workspace
+app.post('/api/v1/workspaces/:workspaceId/deals/embed-all', async (req: Request, res: Response) => {
+  const { workspaceId } = req.params;
+
+  try {
+    // Get all deals in the workspace
+    const deals = await prisma.deal.findMany({
+      where: { workspaceId },
+    });
+
+    if (deals.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No deals to embed',
+        embedded_count: 0,
+      });
+    }
+
+    // Batch embed all deals
+    const pointIds = await aiCoreClient.embedMultipleDeals(deals);
+
+    res.json({
+      success: true,
+      message: `Successfully embedded ${pointIds.length}/${deals.length} deals`,
+      embedded_count: pointIds.length,
+      total_deals: deals.length,
+    });
+  } catch (error) {
+    appLogger.error('Error batch embedding deals:', error as Error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'BATCH_EMBED_ERROR',
+        message: 'Failed to batch embed deals',
+      },
+    });
+  }
 });
 
 // ============================================================================
