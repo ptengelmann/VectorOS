@@ -558,6 +558,100 @@ app.post('/api/v1/workspaces/:workspaceId/deals/embed-all', async (req: Request,
   }
 });
 
+// ML Scoring endpoint - score a single deal
+app.post('/api/v1/deals/:id/score', async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    // Get deal with activities
+    const deal = await prisma.deal.findUnique({
+      where: { id },
+      include: { activities: true },
+    });
+
+    if (!deal) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'DEAL_NOT_FOUND',
+          message: 'Deal not found',
+        },
+      });
+    }
+
+    // Score deal with ML model
+    const score = await aiCoreClient.scoreDeal(deal);
+
+    res.json({
+      success: true,
+      data: score,
+    });
+  } catch (error) {
+    appLogger.error(`Error scoring deal ${id}:`, error as Error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'SCORING_ERROR',
+        message: 'Failed to score deal',
+      },
+    });
+  }
+});
+
+// ML Scoring endpoint - score all deals in a workspace
+app.post('/api/v1/workspaces/:workspaceId/deals/score-all', async (req: Request, res: Response) => {
+  const { workspaceId } = req.params;
+
+  try {
+    // Get all active deals in the workspace
+    const deals = await prisma.deal.findMany({
+      where: {
+        workspaceId,
+        outcome: null, // Only score active deals
+      },
+      include: { activities: true },
+    });
+
+    if (deals.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          scores: {},
+          count: 0,
+        },
+      });
+    }
+
+    // Score all deals
+    const scores = await aiCoreClient.scoreMultipleDeals(deals);
+
+    // Map scores by deal ID
+    const scoresById: Record<string, any> = {};
+    scores.forEach((score) => {
+      if (score.deal_id) {
+        scoresById[score.deal_id] = score;
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        scores: scoresById,
+        count: scores.length,
+      },
+    });
+  } catch (error) {
+    appLogger.error(`Error scoring workspace ${workspaceId} deals:`, error as Error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'BATCH_SCORING_ERROR',
+        message: 'Failed to score workspace deals',
+      },
+    });
+  }
+});
+
 // ============================================================================
 // Activity Routes
 // ============================================================================

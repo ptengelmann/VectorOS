@@ -381,6 +381,40 @@ class APIClient {
     });
   }
 
+  // ML Scoring - score a single deal with XGBoost model
+  async mlScoreDeal(dealId: string): Promise<ApiResponse<{
+    win_probability: number;
+    loss_probability: number;
+    prediction: string;
+    confidence: number;
+    risk_level: string;
+    model_version: string;
+    features_used: number;
+  }>> {
+    return this.request(`${API_BASE_URL}/api/v1/deals/${dealId}/score`, {
+      method: 'POST',
+    });
+  }
+
+  // ML Scoring - score all deals in workspace with XGBoost model
+  async mlScoreWorkspaceDeals(workspaceId: string): Promise<ApiResponse<{
+    scores: Record<string, {
+      win_probability: number;
+      loss_probability: number;
+      prediction: string;
+      confidence: number;
+      risk_level: string;
+      model_version: string;
+      features_used: number;
+      deal_id?: string;
+    }>;
+    count: number;
+  }>> {
+    return this.request(`${API_BASE_URL}/api/v1/workspaces/${workspaceId}/deals/score-all`, {
+      method: 'POST',
+    });
+  }
+
   // ========================================================================
   // Metrics API
   // ========================================================================
